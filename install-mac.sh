@@ -60,4 +60,5 @@ ok ".env: fast and chat models = $MODEL, LLM_MODE=$($LIVE && echo live || echo r
 
 $START || { printf "\n${G}Setup done.${N} Next: ./start.sh\n"; exit 0; }
 ./start.sh
+./doctor.sh || true
 printf "\n  Model:  $MODEL (loaded only while a project runs, unloaded when it finishes or fails)\n  Mode:   switch replay/live in Settings, or re-run with --live\n"

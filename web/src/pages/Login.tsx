@@ -71,6 +71,16 @@ export function Login() {
         <button className="btn primary" style={{ height: 38 }} disabled={busy || lockSecs > 0 || !email || !password}>
           {busy ? 'Signing in…' : lockSecs > 0 ? `Locked (${lockSecs}s)` : 'Sign in'}
         </button>
+        <details className="hint">
+          <summary style={{ cursor: 'pointer' }}>Which account should I use?</summary>
+          <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>
+            <li><b>buyer@sourceloop.test</b>: start and follow a sourcing project</li>
+            <li><b>compliance@</b>, <b>quality@</b>, <b>legal@</b>, <b>finance@sourceloop.test</b>: the specialists a sample project waits on after the buyer</li>
+            <li><b>supplier1@sourceloop.test</b>: see a project from the supplier side</li>
+            <li><b>superadmin@sourceloop.test</b>: everything, including settings</li>
+          </ul>
+          <p style={{ margin: '6px 0 0' }}>Passwords were generated when the app was first set up. In a terminal, run <code>cat data/demo-creds.txt</code> in the project folder.</p>
+        </details>
       </form>
     </div>
   );

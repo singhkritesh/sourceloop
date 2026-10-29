@@ -9,6 +9,8 @@ hash-chained audit log and escalation to humans. Limits live in code, not prompt
 
 **Status:** working prototype and test bed. Connectors to SAP and commercial data are stubs that fail closed; no real supplier or buyer data is used.
 
+**New here and not a developer?** Read [docs/GETTING-STARTED.md](docs/GETTING-STARTED.md). Check your setup any time with `./doctor.sh`.
+
 ## Contents
 
 - [What it does](#what-it-does) · [Architecture](#architecture) · [Quickstart](#quickstart) · [Run on a MacBook with a 4b model](#run-on-a-macbook-with-a-4b-model)
@@ -123,6 +125,7 @@ uses a temporary port 8006 on a COPY of the e2e DB for the tamper, auth-throttle
 
 | Doc | Read it for |
 |---|---|
+| `docs/GETTING-STARTED.md` | Install, first run and troubleshooting in plain language |
 | `docs/PRD.md`, `docs/TRD.md` | Product intent and implementation detail (each ends with an implementation status) |
 | `docs/01-interaction-model.md`, `docs/02-platform-primitives.md` | Stages, messages, checkpoints |
 | `docs/03-connectors.md`, `docs/04-data-dictionary.md` | Data sources and field-by-field map |

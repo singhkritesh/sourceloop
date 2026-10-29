@@ -19,6 +19,9 @@ import { Versions } from './Versions';
 type Save = 'saved' | 'dirty' | 'saving' | 'error';
 const EMPTY: ValidationReport = { errors: [], warnings: [] };
 
+/** Sections shown in the basic view: where models run, how the workflow behaves, and the demo scenarios. */
+const BASIC_SECTIONS = new Set(['providers', 'llm', 'workflow', 'scenarios']);
+
 export function Studio() {
   return (
     <Routes>
@@ -30,6 +33,8 @@ export function Studio() {
 
 function StudioInner() {
   const { section = 'providers' } = useParams();
+  const [advanced, setAdvanced] = useState(() => { try { return localStorage.getItem('sourceloop.studio.advanced') === '1'; } catch { return false; } });
+  const toggleAdvanced = (v: boolean) => { setAdvanced(v); try { localStorage.setItem('sourceloop.studio.advanced', v ? '1' : '0'); } catch { /* per-visit only */ } };
   const nav = useNavigate();
   const qc = useQueryClient();
   const role = useAuth((s) => s.me?.role);
@@ -156,9 +161,11 @@ function StudioInner() {
   }
   if (!ctx || !config || !schemaQ.data) return null;
 
-  const sections = sectionsOf(schemaQ.data.schema);
+  const allSections = sectionsOf(schemaQ.data.schema);
+  // Basic view keeps the few sections most people touch; the current section always stays visible so a deep link still works
+  const sections = advanced ? allSections : allSections.filter((x) => BASIC_SECTIONS.has(x.key) || x.key === section);
   const errCount = (key: string) => report.errors.filter((e) => isSameOrChild(key, normalizeErrorPath(e.path))).length;
-  const cur = sections.find((s) => s.key === section);
+  const cur = allSections.find((s) => s.key === section);
 
   const jump = (path: string) => {
     const top = normalizeErrorPath(path).split('.')[0] ?? '';
@@ -171,6 +178,9 @@ function StudioInner() {
     <FormCtx.Provider value={ctx}>
       <div className="studio">
         <nav className="studio-nav" aria-label="Studio sections">
+          <label className="row hint" style={{ padding: '4px 8px', gap: 6, cursor: 'pointer' }}>
+            <input type="checkbox" checked={advanced} onChange={(e) => toggleAdvanced(e.target.checked)} /> Show advanced sections
+          </label>
           {sections.map((s) => (
             <button key={s.key} aria-current={section === s.key ? 'page' : undefined} onClick={() => nav(`/studio/${s.key}`)}>
               {s.title.replace('Llm', 'LLM roles & models').replace('Data sources', 'Data sources')}

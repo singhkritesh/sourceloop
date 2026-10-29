@@ -34,6 +34,7 @@ export function Shell({ children }: { children: ReactNode }) {
           {can.seeOrganization(role) && <NavLink to="/organization">{role === 'ADMIN' ? 'Organization' : 'Organizations'}</NavLink>}
           {can.seeStudio(role) && <NavLink to="/studio">Studio</NavLink>}
           {can.seeSettings(role) && <NavLink to="/settings">Settings</NavLink>}
+          <NavLink to="/help">Help</NavLink>
         </nav>
         <div className="spacer" />
         <div className="who">

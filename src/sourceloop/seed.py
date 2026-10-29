@@ -137,6 +137,8 @@ def main() -> None:
             await dbm.dispose()
 
     creds = asyncio.run(_run())
+    print("\nSTART HERE: open http://localhost:3010 and sign in as buyer@sourceloop.test (buyer view),")
+    print("supplier1@sourceloop.test (supplier view) or superadmin@sourceloop.test (everything). Then click 'Run a sample project'.")
     print("\nDemo credentials (generated now; shown once; local dev only):")
     print(f"{'email':<34}{'role':<12}password")
     for e, r, p in creds:

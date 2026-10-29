@@ -24,3 +24,6 @@ data/anchors/
 data/*.db-wal
 data/*.db-shm
 .env.local
+
+# local demo handout, not published
+docs/SourceLoop-business-summary.pdf

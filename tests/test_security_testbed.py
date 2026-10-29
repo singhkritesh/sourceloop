@@ -94,3 +94,33 @@ def test_anchor_sink_detects_a_tampered_file(tmp_path):
     assert s.check("p", {3: "a" * 64, 9: "c" * 64})["first_mismatch_seq"] == 9
     s.path.write_text(s.path.read_text().replace("t1", "t9"))
     assert not s.file_intact()
+
+
+async def test_role_picker_signs_in_a_demo_account_without_a_password(w):  # noqa: F811
+    from api_support import Api
+    c = Api(w.app)
+    roles = (await c.get("/auth/demo-roles")).json()
+    assert roles["enabled"] and {a["role"] for a in roles["accounts"]} >= {"BUYER", "COMPLIANCE", "SUPPLIER", "SUPER_ADMIN"}
+    assert all(a["email"].endswith("@sourceloop.test") for a in roles["accounts"])
+    assert "password" not in json.dumps(roles).lower()
+    r = await c.post("/auth/demo-login", {"email": w.emails["buyer"]})
+    assert r.status_code == 200 and r.json()["role"] == "BUYER"
+    assert (await c.get("/auth/me")).json()["email"] == w.emails["buyer"]      # a real session: cookies work for the next call
+    assert (await c.post("/auth/demo-login", {"email": "nobody@sourceloop.test"})).status_code == 404
+    assert (await c.post("/auth/demo-login", {"email": "x@evil.test"})).status_code == 404   # only seeded demo accounts, never others
+    await c.close()
+
+
+async def test_role_picker_is_off_when_disabled_and_ignored_in_prod(w, monkeypatch):  # noqa: F811
+    import dataclasses
+
+    from api_support import Api
+    from sourceloop.api.config import load_settings
+    w.app.state.settings = dataclasses.replace(w.app.state.settings, demo_role_login=False)
+    c = Api(w.app)
+    assert (await c.get("/auth/demo-roles")).json() == {"enabled": False, "accounts": []}
+    assert (await c.post("/auth/demo-login", {"email": w.emails["buyer"]})).status_code == 404
+    await c.close()
+    for k, v in {"APP_ENV": "prod", "JWT_SECRET": "j" * 40, "DEMO_ROLE_LOGIN": "true", "ORG_SIGNING_SECRET": "s" * 40, "CONFIG_ENCRYPTION_KEY": "ZmFrZWtleWZha2VrZXlmYWtla2V5ZmFrZWtleTEyMzQ=", "CORS_ORIGINS": "https://x.example"}.items():
+        monkeypatch.setenv(k, v)
+    assert load_settings().demo_role_login is False       # never honoured in prod, whatever the env says

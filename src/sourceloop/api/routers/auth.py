@@ -142,6 +142,41 @@ async def login(request: Request, body: Credentials, response: Response, db: Asy
     return _me(user, org)  # type: ignore[arg-type]
 
 
+DEMO_DOMAIN = "@sourceloop.test"  # accounts created by `python -m sourceloop.seed`; nothing else is ever offered here
+
+
+class DemoLogin(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    email: str = Field(max_length=254)
+
+
+@router.get("/demo-roles")
+@limiter.limit(deps.login_limit, key_func=deps.ip_key)
+async def demo_roles(request: Request, db: AsyncSession = Depends(get_session)) -> dict:
+    """Test-bed role picker: lists the seeded demo accounts when DEMO_ROLE_LOGIN=true, otherwise `{enabled: false}`."""
+    if not deps.settings_of(request).demo_role_login:
+        return {"enabled": False, "accounts": []}
+    rows = (await db.execute(select(User, Organization).join(Organization, Organization.id == User.org_id)
+                             .where(User.email.like(f"%{DEMO_DOMAIN}")).order_by(User.email))).all()
+    return {"enabled": True, "accounts": [{"email": u.email, "role": u.role.value, "org": o.name, "org_kind": o.kind.value} for u, o in rows]}
+
+
+@router.post("/demo-login")
+@limiter.limit(deps.login_limit, key_func=deps.ip_key)
+async def demo_login(request: Request, body: DemoLogin, response: Response, db: AsyncSession = Depends(get_session)) -> dict:
+    """Sign in as a seeded demo account without a password. Off unless DEMO_ROLE_LOGIN=true (and never in prod); demo accounts only."""
+    if not deps.settings_of(request).demo_role_login:
+        raise ApiError(404, "NOT_FOUND", "not found")
+    email = body.email.strip().lower()
+    row = (await db.execute(select(User, Organization).join(Organization, Organization.id == User.org_id)
+                            .where(User.email == email))).first() if email.endswith(DEMO_DOMAIN) else None
+    if row is None:
+        raise ApiError(404, "NOT_FOUND", "not found")
+    log.warning("auth.demo_login", role=row[0].role.value)  # audible in logs: password-less sign-in happened
+    await _issue(request, response, db, row[0])
+    return _me(row[0], row[1])
+
+
 @router.post("/refresh")
 @limiter.limit(deps.login_limit, key_func=deps.ip_key)
 async def refresh(request: Request, response: Response, db: AsyncSession = Depends(get_session)) -> dict:

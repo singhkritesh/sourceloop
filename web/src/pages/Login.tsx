@@ -1,9 +1,18 @@
 import { useEffect, useState, type FormEvent } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { auth } from '../api/endpoints';
+import { auth, type DemoAccount } from '../api/endpoints';
+import { roleTitle } from '../lib/friendly';
 import { ApiError } from '../api/http';
 import { Icon } from '../components/Icon';
 import { useAuth } from '../state/auth';
+
+const ROLE_HINT: Record<string, string> = {
+  BUYER: 'Start a project and make the big calls', COMPLIANCE: 'Review sanctions and certificate flags', QUALITY: 'Pass or fail suppliers technically',
+  LEGAL: 'Approve protected contract clauses', FINANCE: 'Release payment holds', SUPPLIER: 'See a project from the supplier side',
+  EVALUATOR: 'Read-only view of everything', DESIGNER: 'Edit the configuration in Studio', SUPER_ADMIN: 'Everything, including settings', ADMIN: 'Manage one organization',
+};
+const ORDER = ['BUYER', 'COMPLIANCE', 'QUALITY', 'LEGAL', 'FINANCE', 'SUPPLIER', 'EVALUATOR', 'DESIGNER', 'ADMIN', 'SUPER_ADMIN'];
 
 export function Login() {
   const setMe = useAuth((s) => s.setMe);
@@ -14,6 +23,22 @@ export function Login() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lockSecs, setLockSecs] = useState(0);
+  const roles = useQuery({ queryKey: ['demo-roles'], queryFn: auth.demoRoles, retry: false });
+  const [usePassword, setUsePassword] = useState(false);
+  const picker = !!roles.data?.enabled && !usePassword;
+
+  async function pick(a: DemoAccount) {
+    if (busy) return;
+    setBusy(true); setError(null);
+    try {
+      const me = await auth.demoLogin(a.email);
+      setMe(me);
+      const from = (loc.state as { from?: string } | null)?.from;
+      nav(from && from !== '/login' ? from : '/', { replace: true });
+    } catch {
+      setError('Could not sign in as that role. Check that the app is running (./doctor.sh).');
+    } finally { setBusy(false); }
+  }
 
   useEffect(() => {
     if (lockSecs <= 0) return;
@@ -53,6 +78,28 @@ export function Login() {
   }
   const mm = String(Math.floor(lockSecs / 60)).padStart(1, '0');
   const ss = String(lockSecs % 60).padStart(2, '0');
+  if (picker) {
+    const list = [...(roles.data?.accounts ?? [])].sort((x, y) => ORDER.indexOf(x.role) - ORDER.indexOf(y.role) || x.email.localeCompare(y.email));
+    return (
+      <div className="login-wrap">
+        <div className="card login-card stack" style={{ maxWidth: 560 }}>
+          <div className="brand"><Icon name="logo" /><span>SourceLoop</span></div>
+          <div><h1 id="login-h">Choose a role to continue</h1><p className="muted">Demo environment with made-up data. No password needed: pick who you want to be.</p></div>
+          {error && <div className="callout bad" role="alert"><Icon name="alert" /><div>{error}</div></div>}
+          <div className="stack" role="list" style={{ gap: 8 }}>
+            {list.map((a) => (
+              <button key={a.email} role="listitem" className="btn" style={{ justifyContent: 'flex-start', height: 'auto', padding: '10px 12px', textAlign: 'left' }}
+                disabled={busy} onClick={() => void pick(a)}>
+                <span><b>{roleTitle(a.role)}</b><span className="muted"> · {a.org}</span>
+                  <span className="muted" style={{ display: 'block', fontWeight: 400 }}>{ROLE_HINT[a.role] ?? ''}</span></span>
+              </button>
+            ))}
+          </div>
+          <button className="btn ghost" type="button" onClick={() => setUsePassword(true)}>Sign in with a password instead</button>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="login-wrap">
       <form className="card login-card stack" onSubmit={(e) => void submit(e)} aria-labelledby="login-h">
@@ -71,16 +118,6 @@ export function Login() {
         <button className="btn primary" style={{ height: 38 }} disabled={busy || lockSecs > 0 || !email || !password}>
           {busy ? 'Signing in…' : lockSecs > 0 ? `Locked (${lockSecs}s)` : 'Sign in'}
         </button>
-        <details className="hint">
-          <summary style={{ cursor: 'pointer' }}>Which account should I use?</summary>
-          <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>
-            <li><b>buyer@sourceloop.test</b>: start and follow a sourcing project</li>
-            <li><b>compliance@</b>, <b>quality@</b>, <b>legal@</b>, <b>finance@sourceloop.test</b>: the specialists a sample project waits on after the buyer</li>
-            <li><b>supplier1@sourceloop.test</b>: see a project from the supplier side</li>
-            <li><b>superadmin@sourceloop.test</b>: everything, including settings</li>
-          </ul>
-          <p style={{ margin: '6px 0 0' }}>Passwords were generated when the app was first set up. In a terminal, run <code>cat data/demo-creds.txt</code> in the project folder.</p>
-        </details>
       </form>
     </div>
   );

@@ -24,26 +24,23 @@ Needs 8 GB memory (16 GB is comfortable) and about 10 GB of free disk. Stop the 
 
 ## 2. Sign in
 
-The login page has a "Which account should I use?" note. Use `buyer@sourceloop.test` first. Passwords were generated during install. Show them with:
-
-```bash
-cat data/demo-creds.txt
-```
+The login page is a role picker: click the role you want to try (start with **Buyer**). There is no password in the demo. Use **Sign out** (top right) to switch roles.
+Password sign-in is still there behind "Sign in with a password instead" (passwords are in `data/demo-creds.txt`), and `DEMO_ROLE_LOGIN=false` in `.env` turns the picker off. The picker is never active when `APP_ENV=prod`.
 
 ## 3. Your first run
 
 1. On **Projects**, click **Run a sample project**.
 2. The bar at the top shows the six stages (Need, Discovery, Qualification, Sourcing, Contracting, Onboarding). The card under it says what is happening.
-3. When it says **Needs a decision**, click **Review and decide**, read the evidence and approve. A full run needs several people, as in real life: after you confirm the need, the project waits for **Compliance** (`compliance@sourceloop.test`), then **Quality** (`quality@`), you again for the award, **Legal** (`legal@`) for protected clauses and **Finance** (`finance@`) for payment. The project page always says who it is waiting for. Sign out and in as that person (passwords are in `data/demo-creds.txt`), approve, and the run moves on.
+3. When it says **Needs a decision**, click **Review and decide**, read the evidence and approve. A full run needs several people, as in real life: after you confirm the need, the project waits for **Compliance** , then **Quality** , you again for the award, **Legal**  for protected clauses and **Finance**  for payment. The project page always says who it is waiting for. Sign out and pick that role, approve, and the run moves on.
 4. When it says **Deal reached**, scroll down for suppliers, prices, the contract and the record of every step.
 
 The blue **Demo mode** note means the agents replay recorded answers, so a run is repeatable but does not react to your exact words. To use the local AI model
-instead, sign in as `superadmin@sourceloop.test`, open **Settings** and switch to live mode (or install with `./install-mac.sh --live`). Live runs are slower
+instead, pick **Super admin**, open **Settings** and switch to live mode (or install with `./install-mac.sh --live`). Live runs are slower
 (about a minute or more) and the model is loaded only while a run is working.
 
 ## 4. See the other side
 
-Sign in as `supplier1@sourceloop.test` to see the same project from the supplier's side. A supplier sees only its own conversation and never the buyer's limits.
+Pick **Supplier** to see the same project from the supplier's side. A supplier sees only its own conversation and never the buyer's limits.
 
 ## 5. Words you will see
 
@@ -56,5 +53,4 @@ The **Help** page in the app has a short glossary (agent, limits, qualification,
 | Page will not load | `./doctor.sh`, then `./start.sh` |
 | "Cannot reach the server" | Open Docker Desktop and wait until it says it is running |
 | Run seems stuck | It is likely waiting for you under **Approvals** |
-| Forgot a password | `cat data/demo-creds.txt` |
 | Want a clean start | `./stop.sh && docker compose down -v && rm data/demo-creds.txt && ./start.sh` (deletes all projects) |

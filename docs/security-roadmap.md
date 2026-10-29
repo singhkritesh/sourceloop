@@ -128,3 +128,7 @@ over with a new database? Who holds the signer private keys when agents are in-p
 1. B (anchor) or C (monitoring): highest evidence value for the audit story, independent of the others.
 2. D (step-up for hold release and bank details only): small, directly addresses ASI09/A07.
 3. E phase 1 (kid + rotation), then A (per-run identity), then E phase 2 only if agents leave the process.
+
+## Test-bed role picker
+
+`DEMO_ROLE_LOGIN` (default true outside prod, forced off in prod) lets the login page sign in as a seeded `@sourceloop.test` account without a password (`GET /auth/demo-roles`, `POST /auth/demo-login`; 404 for any other email; each use logs `auth.demo_login`). It exists for the proof of concept only: set `DEMO_ROLE_LOGIN=false` (or `APP_ENV=prod`) to require passwords again.

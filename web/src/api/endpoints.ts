@@ -4,7 +4,11 @@ import type {
   Project, ProjectMessage, Role, Scenario, SettingsView,
 } from './types';
 
+export interface DemoAccount { email: string; role: string; org: string; org_kind: string }
+
 export const auth = {
+  demoRoles: () => http.get<{ enabled: boolean; accounts: DemoAccount[] }>('/auth/demo-roles', { noAuthRetry: true }),
+  demoLogin: (email: string) => http.post<Me>('/auth/demo-login', { email }, { noAuthRetry: true }),
   login: (email: string, password: string) => http.post<Me>('/auth/login', { email, password }, { noAuthRetry: true }),
   me: () => http.get<Me>('/auth/me'),
   logout: () => http.post<void>('/auth/logout', undefined, { noAuthRetry: true }),

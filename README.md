@@ -78,7 +78,7 @@ to `live` in Settings (needs a reachable local Ollama with the configured models
 ./install-mac.sh --live   # same, and new projects use the local model instead of recorded answers
 ```
 
-Needs 8 GB RAM (16 GB comfortable) and about 10 GB disk. Demo logins are written to `data/demo-creds.txt`. Stop with `./stop.sh`.
+Needs 8 GB RAM (16 GB comfortable) and about 10 GB disk. The login page is a role picker (no password). Passwords for the optional password sign-in are in `data/demo-creds.txt`. Stop with `./stop.sh`.
 
 ## Supply chain
 

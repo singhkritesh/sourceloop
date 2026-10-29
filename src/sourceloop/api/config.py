@@ -30,6 +30,7 @@ class Settings:
     access_ttl_minutes: int = 15
     refresh_ttl_hours: int = 8
     registration_enabled: bool = True
+    demo_role_login: bool = True  # test bed: pick a seeded demo role instead of typing a password; never honoured in prod
     argon_time_cost: int = 3
     argon_memory_cost: int = 65536
     argon_parallelism: int = 4
@@ -99,6 +100,7 @@ def load_settings(**overrides: object) -> Settings:
         resolve_limit=e.get("RATE_LIMIT_RESOLVE", Settings.resolve_limit),
         log_level=e.get("LOG_LEVEL", "INFO").upper(),
         audit_anchor_path=e.get("AUDIT_ANCHOR_PATH", ""),
+        demo_role_login=env != "prod" and e.get("DEMO_ROLE_LOGIN", "true").lower() == "true",
         registration_enabled=e.get("REGISTRATION_ENABLED", "false" if env == "prod" else "true").lower() == "true",
         max_active_projects_per_org=int(e.get("MAX_ACTIVE_PROJECTS_PER_ORG", "20")),
         trusted_proxy_hops=max(0, int(e.get("TRUSTED_PROXY_HOPS", "0"))),

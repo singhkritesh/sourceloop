@@ -219,8 +219,8 @@ export function plainStatus(status: string, outcome: string | null | undefined, 
 export interface NextStep { headline: string; detail: string; tone: 'ok' | 'warn' | 'bad' | 'info' | 'accent' | '' ; action?: 'approvals' | 'start' | 'resume' }
 export interface NextStepInput { status: string; stage: string; outcome: string | null | undefined; pendingKinds: { kind: string; role: string }[]; lost: boolean; role?: string; reason?: string | null }
 
-/** Demo logins created by the seed, one per approver role, so a newcomer knows where to go next. */
-const DEMO_ACCOUNT: Record<string, string> = { BUYER: 'buyer@sourceloop.test', COMPLIANCE: 'compliance@sourceloop.test', QUALITY: 'quality@sourceloop.test', LEGAL: 'legal@sourceloop.test', FINANCE: 'finance@sourceloop.test' };
+/** Demo roles offered on the login page, one per approver role, so a newcomer knows where to go next. */
+const DEMO_ACCOUNT: Record<string, string> = { BUYER: 'Buyer', COMPLIANCE: 'Compliance', QUALITY: 'Quality', LEGAL: 'Legal', FINANCE: 'Finance' };
 
 /** What a person should read first on a project: what is happening and what happens next. */
 export function nextStep(i: NextStepInput): NextStep {
@@ -231,7 +231,7 @@ export function nextStep(i: NextStepInput): NextStep {
     const info = approvalInfo(first.kind);
     if (mine.length) return { headline: `Your decision is needed: ${info.title.toLowerCase()}`, detail: `${info.ask} ${info.why}`, tone: 'warn', action: 'approvals' };
     const demo = DEMO_ACCOUNT[first.role];
-    return { headline: `Waiting for ${roleLabel(first.role)}: ${info.title.toLowerCase()}`, detail: `${info.ask} The agents are paused until ${roleLabel(first.role)} decides.${demo ? ` In the demo, sign out and sign in as ${demo} to decide.` : ''}`, tone: 'info' };
+    return { headline: `Waiting for ${roleLabel(first.role)}: ${info.title.toLowerCase()}`, detail: `${info.ask} The agents are paused until ${roleLabel(first.role)} decides.${demo ? ` In the demo, sign out and pick the ${demo} role to decide.` : ''}`, tone: 'info' };
   }
   switch (i.status) {
     case 'DRAFT': return { headline: 'Ready when you are', detail: 'Start the run and the buyer agent will take the need through discovery, qualification, sourcing and contracting. It pauses for a person at every important decision.', tone: 'accent', action: 'start' };

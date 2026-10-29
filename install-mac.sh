@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # One-command setup for a MacBook, sized for a 4b local model (qwen3.5:4b, ~3.4 GB on disk, ~5 GB RAM while loaded).
-# Installs what is missing (Homebrew, Docker Desktop, Ollama), pulls the model, writes .env, builds, starts and seeds.
+# Installs what is missing (Homebrew, Docker Desktop, Ollama), pulls the model, writes .env, builds, starts, seeds and opens the app in your browser.
 # Usage: ./install-mac.sh [--model qwen3.5:4b] [--no-start] [--live]
 #   --live   makes new projects use the local model (LLM_MODE=live); default is replay (recorded answers, no model needed)
 set -euo pipefail
@@ -61,4 +61,5 @@ ok ".env: fast and chat models = $MODEL, LLM_MODE=$($LIVE && echo live || echo r
 $START || { printf "\n${G}Setup done.${N} Next: ./start.sh\n"; exit 0; }
 ./start.sh
 ./doctor.sh || true
+open http://localhost:3010 2>/dev/null || true   # show the app in the default browser
 printf "\n  Model:  $MODEL (loaded only while a project runs, unloaded when it finishes or fails)\n  Mode:   switch replay/live in Settings, or re-run with --live\n"

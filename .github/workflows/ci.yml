@@ -61,7 +61,7 @@ jobs:
       - name: SBOM (CycloneDX, Python runtime)
         run: |
           .tools/bin/cyclonedx-py requirements requirements.lock --of JSON -o sbom-python.cdx.json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: sbom-python
           path: sbom-python.cdx.json
@@ -87,7 +87,7 @@ jobs:
         run: npm audit --audit-level=high
       - name: SBOM (CycloneDX, npm production deps)
         run: npm sbom --sbom-format cyclonedx --omit dev > sbom-npm.cdx.json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: sbom-npm
           path: web/sbom-npm.cdx.json

@@ -39,6 +39,7 @@ SAP/
 ├── tests/                        ← pytest; adversarial/ holds the 18-case suite (strict xfail for the open LIMIT-1)
 ├── alembic/                      ← migrations (DO NOT hand-edit applied versions)
 ├── data/replay/                  ← recorded LLM/news/weather responses (keys are hashes; don't rename)
+├── install-mac.sh doctor.sh      ← MacBook one-command setup (4b model, writes SL_FAST_MODEL/SL_CHAT_MODEL for the seed) / health checklist with fixes; docs/GETTING-STARTED.md is the non-technical guide
 ├── install.sh build.sh start.sh stop.sh ← new-machine setup (installs only what is missing) / `build.sh` builds images + creates containers / `./start.sh [--local]` / stop + unload Ollama
 ├── Dockerfile  docker-compose.yml  web/{Dockerfile,nginx.conf} ← api (8005→8000) + web nginx (3010→8080, proxies /api, SSE unbuffered); verified 2026-10-23
 ├── requirements.lock / requirements-dev.lock  ← pinned Python deps (source of truth; `scripts/lock.py` generates/--check; no uv in this repo)

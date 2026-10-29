@@ -1,0 +1,15 @@
+.venv
+.git
+.pytest_cache
+.ruff_cache
+.import_linter_cache
+**/__pycache__
+*.db
+web/node_modules
+tests
+.env
+data/e2e
+data/*.db*
+web/dist
+node_modules
+*.log

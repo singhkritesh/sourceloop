@@ -1,0 +1,195 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:0;background:#fff;font-family:-apple-system,Helvetica,Arial,sans-serif}
+svg text{font-family:-apple-system,Helvetica,Arial,sans-serif}
+.t{font-size:13px;fill:#1f2937}.s{font-size:11px;fill:#4b5563}.h{font-size:15px;font-weight:700;fill:#111827}.lbl{font-size:11px;fill:#374151;font-style:italic}
+</style></head><body>
+<svg id="d" xmlns="http://www.w3.org/2000/svg" width="1700" height="1200" viewBox="0 0 1700 1200">
+<defs>
+<marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#475569"/></marker>
+<marker id="r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#b91c1c"/></marker>
+</defs>
+<rect width="1700" height="1200" fill="#fff"/>
+<text x="850" y="36" text-anchor="middle" style="font-size:24px;font-weight:700;fill:#111827">SourceLoop — Agentic Sourcing Architecture</text>
+<text x="850" y="58" text-anchor="middle" class="s">SAP Business Network · Track 1: discovery → qualification → sourcing → contracting · synthetic data only · limits live in code, not prompts</text>
+
+<!-- USERS -->
+<rect x="30" y="80" width="1640" height="92" rx="10" fill="#f8fafc" stroke="#cbd5e1"/>
+<text x="46" y="102" class="h">Humans (role-based, cookie auth + CSRF)</text>
+<g class="t">
+<rect x="46" y="112" width="150" height="48" rx="6" fill="#dbeafe" stroke="#60a5fa"/><text x="121" y="133" text-anchor="middle">Buyer</text><text x="121" y="149" text-anchor="middle" class="s">creates need, starts run</text>
+<rect x="210" y="112" width="400" height="48" rx="6" fill="#fef3c7" stroke="#f59e0b"/><text x="410" y="133" text-anchor="middle">Compliance · Quality · Legal · Finance</text><text x="410" y="149" text-anchor="middle" class="s">approve / edit / reject at every human gate</text>
+<rect x="624" y="112" width="170" height="48" rx="6" fill="#dcfce7" stroke="#4ade80"/><text x="709" y="133" text-anchor="middle">Supplier users</text><text x="709" y="149" text-anchor="middle" class="s">neutral, clamped view</text>
+<rect x="808" y="112" width="170" height="48" rx="6" fill="#ede9fe" stroke="#a78bfa"/><text x="893" y="133" text-anchor="middle">Evaluator</text><text x="893" y="149" text-anchor="middle" class="s">read-only, audit export</text>
+<rect x="992" y="112" width="250" height="48" rx="6" fill="#fce7f3" stroke="#f472b6"/><text x="1117" y="133" text-anchor="middle">Admin · Designer (Studio)</text><text x="1117" y="149" text-anchor="middle" class="s">no-code config, publish versions</text>
+</g>
+
+<!-- WEB + API -->
+<rect x="30" y="200" width="1640" height="150" rx="10" fill="#f1f5f9" stroke="#94a3b8"/>
+<text x="46" y="222" class="h">Delivery layer (Docker: web 3010 → api 8005)</text>
+<g class="t">
+<rect x="46" y="238" width="360" height="100" rx="8" fill="#e0f2fe" stroke="#38bdf8"/>
+<text x="226" y="260" text-anchor="middle" style="font-weight:700">Web SPA (React 18 · Vite · TS) via nginx</text>
+<text x="226" y="280" text-anchor="middle" class="s">TanStack Query · Zustand · react-router</text>
+<text x="226" y="296" text-anchor="middle" class="s">Projects · Approvals · Suppliers · Settings</text>
+<text x="226" y="312" text-anchor="middle" class="s">Studio (schema-driven forms) · SSE via fetch</text>
+<rect x="470" y="238" width="1184" height="100" rx="8" fill="#e0f2fe" stroke="#38bdf8"/>
+<text x="1062" y="260" text-anchor="middle" style="font-weight:700">FastAPI service (ProjectService · RunHandles · broker)</text>
+<text x="1062" y="280" text-anchor="middle" class="s">auth: argon2 · JWT cookies · rotating refresh · CSRF · lockout/throttle · RBAC with SQL scoping (cross-tenant = 404)</text>
+<text x="1062" y="296" text-anchor="middle" class="s">routers: auth · projects · approvals · suppliers · settings · studio · audit export · reviewers · SSE stream (id = audit seq, resume, 15 s heartbeat)</text>
+<text x="1062" y="312" text-anchor="middle" class="s">rate limits · quotas · tamper guard before start/resume · error envelope · security headers/CSP</text>
+</g>
+<line x1="406" y1="288" x2="468" y2="288" stroke="#475569" stroke-width="1.6" marker-end="url(#a)" marker-start="url(#a)"/>
+<line x1="850" y1="172" x2="850" y2="236" stroke="#475569" stroke-width="1.6" marker-end="url(#a)" marker-start="url(#a)"/>
+<text x="858" y="205" class="lbl">HTTPS /api + SSE</text>
+
+<!-- AGENT PLANE -->
+<rect x="30" y="380" width="1640" height="560" rx="10" fill="#fffbeb" stroke="#f59e0b" stroke-dasharray="6 4"/>
+<text x="46" y="402" class="h">Run plane — one asyncio task per project, config pinned to a published Studio version</text>
+
+<!-- Buyer side -->
+<rect x="50" y="420" width="400" height="500" rx="10" fill="#eff6ff" stroke="#3b82f6"/>
+<text x="250" y="444" text-anchor="middle" class="h">BUYER SIDE (untrusted agents)</text>
+<rect x="70" y="456" width="360" height="86" rx="8" fill="#bfdbfe" stroke="#2563eb"/>
+<text x="250" y="478" text-anchor="middle" class="t" style="font-weight:700">Buyer lead agent</text>
+<text x="250" y="496" text-anchor="middle" class="s">plans the sourcing; may import only bus client,</text>
+<text x="250" y="511" text-anchor="middle" class="s">enums and agents.common (import-linter enforced)</text>
+<text x="250" y="526" text-anchor="middle" class="s">per-agent tool allowlist (NOT_ALLOWED + audit)</text>
+<rect x="70" y="556" width="360" height="52" rx="8" fill="#dbeafe" stroke="#3b82f6"/>
+<text x="250" y="578" text-anchor="middle" class="t">Buyer mandate (signed, immutable)</text>
+<text x="250" y="595" text-anchor="middle" class="s">max price · lead time · rounds · excluded countries · locked clauses</text>
+<rect x="70" y="622" width="360" height="282" rx="8" fill="#f0f9ff" stroke="#7dd3fc"/>
+<text x="250" y="644" text-anchor="middle" class="t" style="font-weight:700">Typed subagents / tools (trusted code, fail closed)</text>
+<g class="s">
+<text x="86" y="668">• supplier_discovery — registry search, scoring</text>
+<text x="86" y="688">• entity_resolution — rapidfuzz, watchlist (never auto-clear)</text>
+<text x="86" y="708">• compliance_screen — rules-only QUALIFIED / BLOCKED</text>
+<text x="86" y="728">• certificate &amp; document check — expiry, claimed vs proven</text>
+<text x="86" y="748">• landed_cost — Decimal, margin, price band vs index</text>
+<text x="86" y="768">• regional_news_risk — LLM extraction only</text>
+<text x="86" y="788">• weather_logistics — public data</text>
+<text x="86" y="808">• negotiation helper — code-supplied price options</text>
+<text x="86" y="828">• contract draft — clause library, locked clauses</text>
+<text x="86" y="858" style="font-style:italic">Output: SubagentResult{result, confidence, sources,</text>
+<text x="86" y="874" style="font-style:italic">assumptions}; low confidence → escalate</text>
+</g>
+
+<!-- Supplier side -->
+<rect x="1250" y="420" width="400" height="500" rx="10" fill="#f0fdf4" stroke="#22c55e"/>
+<text x="1450" y="444" text-anchor="middle" class="h">SUPPLIER SIDE (untrusted agents)</text>
+<rect x="1270" y="456" width="360" height="86" rx="8" fill="#bbf7d0" stroke="#16a34a"/>
+<text x="1450" y="478" text-anchor="middle" class="t" style="font-weight:700">Supplier agent(s)</text>
+<text x="1450" y="496" text-anchor="middle" class="s">responds to invites, submits docs, offers, counters,</text>
+<text x="1450" y="511" text-anchor="middle" class="s">redlines; sees only its own org's projects</text>
+<rect x="1270" y="556" width="360" height="52" rx="8" fill="#dcfce7" stroke="#22c55e"/>
+<text x="1450" y="578" text-anchor="middle" class="t">Supplier mandate (signed, immutable)</text>
+<text x="1450" y="595" text-anchor="middle" class="s">price floor · capacity · lead time · provable certs · unchangeable clauses</text>
+<rect x="1270" y="622" width="360" height="282" rx="8" fill="#f7fee7" stroke="#a3e635"/>
+<text x="1450" y="644" text-anchor="middle" class="t" style="font-weight:700">Supplier tools (trusted code)</text>
+<g class="s">
+<text x="1286" y="668">• quote builder — unit cost + margin (Decimal)</text>
+<text x="1286" y="688">• capacity &amp; lead-time check</text>
+<text x="1286" y="708">• certificate / document pack</text>
+<text x="1286" y="728">• counter-offer options within floor</text>
+<text x="1286" y="748">• clause redline within unchangeable set</text>
+<text x="1286" y="790" style="font-style:italic">unit_cost never leaves the supplier side;</text>
+<text x="1286" y="806" style="font-style:italic">the buyer sees only offers + pass/fail rule ids</text>
+</g>
+
+<!-- Orchestrator -->
+<rect x="500" y="420" width="700" height="500" rx="12" fill="#fff" stroke="#111827" stroke-width="2.5"/>
+<text x="850" y="446" text-anchor="middle" style="font-size:17px;font-weight:700;fill:#111827">Deterministic Orchestrator — neutral SBN trust layer</text>
+<text x="850" y="464" text-anchor="middle" class="s">no LLM decides state, qualification, prices or approvals</text>
+<g class="t">
+<rect x="520" y="480" width="320" height="104" rx="8" fill="#f3f4f6" stroke="#6b7280"/>
+<text x="680" y="502" text-anchor="middle" style="font-weight:700">State machine (RunExecutor)</text>
+<text x="680" y="522" text-anchor="middle" class="s">NEED → DISCOVERY → QUALIFICATION</text>
+<text x="680" y="538" text-anchor="middle" class="s">→ SOURCING (RFQ + bounded negotiation)</text>
+<text x="680" y="554" text-anchor="middle" class="s">→ CONTRACTING → DONE · ESCALATED / STOPPED</text>
+<text x="680" y="574" text-anchor="middle" class="s">claim-then-process · injected Clock · seeded RNG</text>
+<rect x="860" y="480" width="320" height="104" rx="8" fill="#f3f4f6" stroke="#6b7280"/>
+<text x="1020" y="502" text-anchor="middle" style="font-weight:700">Message bus</text>
+<text x="1020" y="522" text-anchor="middle" class="s">strict Pydantic envelopes (extra=forbid)</text>
+<text x="1020" y="538" text-anchor="middle" class="s">signed · unique (project, seq) · inbox per agent</text>
+<text x="1020" y="554" text-anchor="middle" class="s">INVITE · RFQ · OFFER · COUNTER · ACCEPT ·</text>
+<text x="1020" y="570" text-anchor="middle" class="s">DOC_SUBMISSION · CONTRACT_DRAFT · REDLINE</text>
+<rect x="520" y="600" width="320" height="104" rx="8" fill="#fee2e2" stroke="#dc2626"/>
+<text x="680" y="622" text-anchor="middle" style="font-weight:700">Policy engine (pure functions)</text>
+<text x="680" y="642" text-anchor="middle" class="s">check(msg, SENDER mandate) → ALLOW / BLOCK / ESCALATE</text>
+<text x="680" y="658" text-anchor="middle" class="s">returns rule_id only — predicates, never thresholds</text>
+<text x="680" y="674" text-anchor="middle" class="s">price band fails closed · locked clauses → Legal</text>
+<text x="680" y="692" text-anchor="middle" class="s">+ Studio rules that can only add stops</text>
+<rect x="860" y="600" width="320" height="104" rx="8" fill="#fef3c7" stroke="#d97706"/>
+<text x="1020" y="622" text-anchor="middle" style="font-weight:700">Approvals &amp; escalation</text>
+<text x="1020" y="642" text-anchor="middle" class="s">compliance flag · technical pass/fail · award</text>
+<text x="1020" y="658" text-anchor="middle" class="s">locked clause · signature · bank details · hold release</text>
+<text x="1020" y="674" text-anchor="middle" class="s">version-locked CAS · SLA/OVERDUE · single-use waivers</text>
+<text x="1020" y="692" text-anchor="middle" class="s">BLOCK is never waivable · hold release = FINANCE only</text>
+<rect x="520" y="720" width="320" height="86" rx="8" fill="#ede9fe" stroke="#7c3aed"/>
+<text x="680" y="742" text-anchor="middle" style="font-weight:700">Hash-chained audit log</text>
+<text x="680" y="762" text-anchor="middle" class="s">append-only · canonical JSON · prev_hash/hash</text>
+<text x="680" y="778" text-anchor="middle" class="s">audit first, then deliver / emit SSE</text>
+<text x="680" y="794" text-anchor="middle" class="s">verify · NDJSON export · tamper guard</text>
+<rect x="860" y="720" width="320" height="86" rx="8" fill="#ede9fe" stroke="#7c3aed"/>
+<text x="1020" y="742" text-anchor="middle" style="font-weight:700">Guards (code invariants)</text>
+<text x="1020" y="762" text-anchor="middle" class="s">mandate secrecy · rules-only qualification</text>
+<text x="1020" y="778" text-anchor="middle" class="s">watchlist no-auto-clear · untrusted wrapper</text>
+<text x="1020" y="794" text-anchor="middle" class="s">LLM price must be a code-supplied option · fail closed</text>
+<rect x="520" y="822" width="660" height="80" rx="8" fill="#ecfeff" stroke="#0891b2"/>
+<text x="850" y="844" text-anchor="middle" style="font-weight:700">Studio config (no-code) — pinned per project</text>
+<text x="850" y="864" text-anchor="middle" class="s">models · providers (write-only vault) · agents · prompts (body only) · workflow · rules · templates · clauses · scenarios</text>
+<text x="850" y="882" text-anchor="middle" class="s">draft → validate → publish (immutable, content-hashed) → rollback · 17+ invariants no field can disable</text>
+</g>
+
+<!-- arrows agents <-> bus -->
+<line x1="432" y1="500" x2="518" y2="520" stroke="#475569" stroke-width="1.8" marker-end="url(#a)" marker-start="url(#a)"/>
+<line x1="1182" y1="520" x2="1268" y2="500" stroke="#475569" stroke-width="1.8" marker-end="url(#a)" marker-start="url(#a)"/>
+<!-- trusted tools <-> orchestrator -->
+<line x1="432" y1="700" x2="518" y2="660" stroke="#475569" stroke-width="1.6" marker-end="url(#a)" marker-start="url(#a)"/>
+<line x1="1182" y1="660" x2="1268" y2="700" stroke="#475569" stroke-width="1.6" marker-end="url(#a)" marker-start="url(#a)"/>
+<!-- mandate -> policy -->
+<line x1="432" y1="582" x2="518" y2="630" stroke="#b91c1c" stroke-width="1.6" stroke-dasharray="5 3" marker-end="url(#r)"/>
+<line x1="1268" y1="582" x2="1182" y2="630" stroke="#b91c1c" stroke-width="1.6" stroke-dasharray="5 3" marker-end="url(#r)"/>
+<!-- the wall -->
+<text x="1640" y="934" text-anchor="end" class="s" style="fill:#b91c1c;font-weight:700">✕ dashed red = mandate checked on the SENDER only · only rule ids cross the boundary</text>
+<!-- api -> orchestrator -->
+<line x1="850" y1="340" x2="850" y2="418" stroke="#475569" stroke-width="1.8" marker-end="url(#a)" marker-start="url(#a)"/>
+<text x="858" y="372" class="lbl">start / resume / resolve approvals · SSE events out</text>
+
+<!-- BOTTOM: external -->
+<rect x="30" y="970" width="560" height="190" rx="10" fill="#fdf2f8" stroke="#ec4899"/>
+<text x="46" y="992" class="h">LLM layer (host Ollama; replay/record/live)</text>
+<g class="s">
+<text x="46" y="1014">• prompt_builder owns preamble ("Respond only in English"), &lt;untrusted_data&gt;</text>
+<text x="46" y="1030">  wrapper and schema suffix; Studio edits only the instruction body</text>
+<text x="46" y="1050">• used to read news text → NewsSignals schema (required source), nothing else</text>
+<text x="46" y="1070">• think:false for gemma/qwen · non-streaming JSON · keep_alive:0 unload</text>
+<text x="46" y="1090">• token budget per project → pause BUDGET_EXCEEDED · provenance per call</text>
+<text x="46" y="1110">• injection flags + sanitizer on all external text; invalid output → confidence 0</text>
+<text x="46" y="1130">• fast: gemma4:e2b-mlx · chat: qwen3.8:27b-mlx · replay store keyed by hashes</text>
+</g>
+<rect x="620" y="970" width="460" height="190" rx="10" fill="#f8fafc" stroke="#64748b"/>
+<text x="636" y="992" class="h">Persistence (single async engine)</text>
+<g class="s">
+<text x="636" y="1014">SQLite (Docker volume sl_data) · Postgres-compatible · Alembic 0001–0004</text>
+<text x="636" y="1034">project · project_supplier · mandate* · message · offer · subagent_call</text>
+<text x="636" y="1050">approval · ledger_hold · contract · clause · audit_event* · audit_anchor*</text>
+<text x="636" y="1066">user · org · revoked_token · studio_config_version* · app_setting · vault</text>
+<text x="636" y="1082">registry: supplier · certificate · watchlist_entry · transaction_history ·</text>
+<text x="636" y="1098">buyer_profile · index_price</text>
+<text x="636" y="1122" style="font-style:italic">* immutable: flush guard + DB triggers (UPDATE/DELETE rejected)</text>
+</g>
+<rect x="1110" y="970" width="560" height="190" rx="10" fill="#fefce8" stroke="#ca8a04"/>
+<text x="1126" y="992" class="h">External &amp; assurance</text>
+<g class="s">
+<text x="1126" y="1014">• safe_http: the only outbound client — host allowlist, private IPs blocked,</text>
+<text x="1126" y="1030">  no redirects, 2 MB cap; supplier URLs are never fetched</text>
+<text x="1126" y="1050">• news / weather feeds (recorded in replay) · synthetic registry data</text>
+<text x="1126" y="1070">• evaluation harness (ablations, baseline, metrics) · 815 tests + adversarial suite</text>
+<text x="1126" y="1090">• OWASP Web/LLM/Agentic mapping · ASVS · NIST AI RMF · ATLAS (docs/security-mapping.md)</text>
+<text x="1126" y="1110">• CI: ruff · import-linter · bandit · pip-audit · SBOM · lockfiles</text>
+<text x="1126" y="1130">• Docker: api (8005) + web/nginx (3010); Ollama on host via host.docker.internal</text>
+</g>
+<line x1="850" y1="920" x2="850" y2="968" stroke="#475569" stroke-width="1.6" marker-end="url(#a)"/>
+<line x1="300" y1="920" x2="300" y2="968" stroke="#475569" stroke-width="1.4" marker-end="url(#a)"/>
+<text x="1142" y="1176" class="s" style="fill:#6b7280">Generated from the codebase · see docs/TRD.md and docs/01-interaction-model.md</text>
+</svg></body></html>

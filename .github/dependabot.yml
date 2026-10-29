@@ -1,0 +1,17 @@
+version: 2
+updates:
+  # Python: bump pyproject ranges; regenerate requirements*.lock with scripts/lock.py in the same PR.
+  - package-ecosystem: pip
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+  - package-ecosystem: npm
+    directory: "/web"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly

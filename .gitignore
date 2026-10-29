@@ -1,0 +1,26 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+llm.config.yaml
+*.db
+data/replay/*.local.json
+.pytest_cache/
+.ruff_cache/
+.coverage
+node_modules/
+web/dist/
+data/e2e/
+data/demo-creds.txt
+data/*.pid
+data/*.log
+
+# local state
+.DS_Store
+.import_linter_cache/
+data/ui/
+data/eval/
+data/anchors/
+data/*.db-wal
+data/*.db-shm
+.env.local

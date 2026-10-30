@@ -1,4 +1,5 @@
 #!/usr/bin/env sh
+# STALE: phases B, N, P, O and C drive the pre-2026-10 role set and six-checkpoint flow. Use web/scripts/e2e-simple.mjs (current journey) until these are rewritten.
 # Full real-stack e2e on a FRESH DB (data/e2e/e2e.db). Needs: web dev server on 3010 (cd web && npm run dev), Chrome, local Ollama with the fast model for phase D.
 # Usage: scripts/e2e-all.sh [tag]   -> logs in data/e2e/run-<tag>-*.log ; exit 1 if any phase fails.
 cd "$(dirname "$0")/.."

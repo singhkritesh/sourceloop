@@ -1,3 +1,4 @@
+// STALE: written for the old role set and six-checkpoint flow; not rerun since the buyer-only change. Current journey: e2e-simple.mjs
 // Real-stack e2e journeys. Usage (from web/): E2E_CREDS=../data/e2e/creds.json node scripts/e2e.mjs B [C D E F ...]
 // Requires: API on 8005 (fresh DB seeded; creds file from the seed output) and `npm run dev` on 3010.
 import fs from 'node:fs';

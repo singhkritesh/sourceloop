@@ -8,8 +8,8 @@ SBN's super admin and evaluator everywhere, and an organization admin for its ow
 
 | role | who | scope |
 |---|---|---|
-| `BUYER` | a buyer organization's procurement user | creates and starts projects, approves the Requirement and Award checkpoints; business view of own projects |
-| `COMPLIANCE`, `QUALITY`, `LEGAL`, `FINANCE` | the buyer organization's approvers | each resolves only its own checkpoints; business view of the organization's projects |
+| `BUYER` | a buyer organization's procurement user | creates and starts projects and makes EVERY buyer-side decision (flagged supplier, award, changed locked clause, bank details with payment release); business view of own projects |
+| `COMPLIANCE`, `QUALITY`, `LEGAL`, `FINANCE` | legacy roles (kept in the enum for old data) | own no checkpoint and are not created by the seed or offered by the login page |
 | `SUPPLIER` | a supplier organization's user | sees only the projects it was invited to, and only its own thread, in a neutral form |
 | `ADMIN` (**organization admin**) | one per buyer or supplier organization | manages its OWN organization: people and roles, and own-side agent settings; may inspect its own side's agent workflow |
 | `SUPER_ADMIN` (**SBN super admin**) | SBN platform operator | all access: every organization, Studio (platform configuration), settings (including the platform kill switch), the full workflow; resolves operational (`ADMIN`-targeted) approvals |
@@ -43,7 +43,7 @@ both sides' conduct; a supplier sees only the verdicts on its own (actor `you`).
 Routes under `/org` (own organization; `?org_id=` for `SUPER_ADMIN`/`EVALUATOR`, where another organization's id is a **404** for an org admin):
 
 * **People** `GET/POST /org/users`, `PATCH /org/users/{id}` (`role`, `disabled`), `POST /org/users/{id}/reset-password`.
-  * Roles allowed per organization kind: buyer org `BUYER COMPLIANCE QUALITY LEGAL FINANCE ADMIN`; supplier org `SUPPLIER ADMIN`.
+  * Roles allowed per organization kind: buyer org `BUYER ADMIN`; supplier org `SUPPLIER ADMIN`.
   * A new person gets a **one-time password**, returned once in the response of the call that created it and never retrievable afterwards.
     A password reset revokes the refresh tokens (no new sessions); an access token already issued lives out its short lifetime. Disabling is immediate.
   * Guard rails: you cannot change or disable yourself; an organization always keeps one active admin; platform staff are managed by SBN.
@@ -74,3 +74,8 @@ plus `buyer@ compliance@ quality@ legal@ finance@ supplier1@ supplier2@ evaluato
 * Organization-specific provider connections and keys, per-organization Studio configuration beyond the whitelisted fields, SSO/MFA for admins
   and approval workflows for admin actions are not built.
 * A business user can still see decision comments written by colleagues in the same organization (they are that organization's own records).
+
+
+## Approvals belong to the buyer user
+
+`orchestrator/approvals.py KIND_ROLE` maps every human checkpoint to `BUYER`. `ADMIN` (organization) and `SUPER_ADMIN` (SBN) set rules, manage people and mediate; they cannot resolve an approval (403), and an invariant (`INV_HOLD_RELEASE_BUYER`) fails the publish if the map is ever pointed at an admin. The login page is a role picker (`DEMO_ROLE_LOGIN`): Buyer 1 and 2, Supplier 1 and 2, SBN admin and one organization admin per organization.

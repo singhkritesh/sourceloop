@@ -31,17 +31,17 @@ async def test_org_admin_manages_only_its_own_organizations_users(w):  # noqa: F
     other = (await (await w.client("admin")).get(f"/org/users?org_id={w.orgs['globex']}")).json()["items"]
     assert [u["email"] for u in other] == [w.emails["buyer_b"]]
     info = (await oa.get("/org")).json()
-    assert info["kind"] == "BUYER" and set(info["roles"]) == {"BUYER", "COMPLIANCE", "QUALITY", "LEGAL", "FINANCE", "ADMIN"}
+    assert info["kind"] == "BUYER" and set(info["roles"]) == {"BUYER", "ADMIN"}
 
 
 async def test_create_user_one_time_password_login_and_audit_without_secrets(w):  # noqa: F811
     oa = await w.client("org_admin")
-    r = await oa.post("/org/users", {"email": "New.Person@Sourceloop.test", "role": "COMPLIANCE"})
+    r = await oa.post("/org/users", {"email": "New.Person@Sourceloop.test", "role": "BUYER"})
     assert r.status_code == 201
     pw = r.json()["initial_password"]
-    assert r.json()["user"]["email"] == "new.person@sourceloop.test" and r.json()["user"]["role"] == "COMPLIANCE" and len(pw) >= 14
+    assert r.json()["user"]["email"] == "new.person@sourceloop.test" and r.json()["user"]["role"] == "BUYER" and len(pw) >= 14
     c, code = await login_ok(w, "new.person@sourceloop.test", pw)
-    assert code == 200 and (await c.get("/auth/me")).json()["role"] == "COMPLIANCE"
+    assert code == 200 and (await c.get("/auth/me")).json()["role"] == "BUYER"
     listed = (await oa.get("/org/users")).json()["items"]
     assert pw not in json.dumps(listed) and "password" not in json.dumps(listed).lower()        # the password is never retrievable again
     assert (await oa.post("/org/users", {"email": "new.person@sourceloop.test", "role": "BUYER"})).status_code == 409
@@ -80,15 +80,15 @@ async def test_disable_user_ends_live_sessions_and_logins_and_enable_restores(w)
 async def test_role_change_is_immediate_and_guard_rails_hold(w):  # noqa: F811
     oa = await w.client("org_admin")
     uid = str(w.ids["finance"])
-    assert (await patch(oa, f"/org/users/{uid}", {"role": "LEGAL"})).json()["role"] == "LEGAL"
-    assert (await (await w.client("finance")).get("/auth/me")).json()["role"] == "LEGAL"
+    assert (await patch(oa, f"/org/users/{uid}", {"role": "ADMIN"})).json()["role"] == "ADMIN"
+    assert (await (await w.client("finance")).get("/auth/me")).json()["role"] == "ADMIN"
     assert (await patch(oa, f"/org/users/{uid}", {"role": "SUPPLIER"})).status_code == 422
     me = str(w.ids["org_admin"])
     assert (await patch(oa, f"/org/users/{me}", {"disabled": True})).status_code == 409          # cannot lock yourself out
     assert (await patch(oa, f"/org/users/{me}", {"role": "BUYER"})).status_code == 409
     assert (await patch(oa, f"/org/users/{uid}", {})).status_code == 422
-    assert (await patch(oa, f"/org/users/{w.ids['buyer_b']}", {"role": "LEGAL"})).status_code == 404   # another organization's user
-    assert (await patch(oa, f"/org/users/{uuid.uuid4()}", {"role": "LEGAL"})).status_code == 404
+    assert (await patch(oa, f"/org/users/{w.ids['buyer_b']}", {"role": "ADMIN"})).status_code == 404   # another organization's user
+    assert (await patch(oa, f"/org/users/{uuid.uuid4()}", {"role": "ADMIN"})).status_code == 404
 
 
 async def test_an_organization_always_keeps_one_active_admin(w):  # noqa: F811

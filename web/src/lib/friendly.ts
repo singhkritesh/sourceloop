@@ -37,7 +37,7 @@ export const APPROVAL_INFO: Record<string, ApprovalInfo> = {
   CLAUSE: {
     title: 'Decide on a contract clause change',
     ask: 'A party wants to change a contract clause.',
-    why: 'Legal decides on clause changes, and protected clauses (liability, termination, IP) can never change automatically.',
+    why: 'The buyer decides on clause changes, and protected clauses (liability, termination, IP) can never change automatically.',
     approve: 'The proposed change is accepted.',
     reject: 'The original clause stays.',
     edit: 'Accept or decline the proposed change.',
@@ -57,11 +57,11 @@ export const APPROVAL_INFO: Record<string, ApprovalInfo> = {
     reject: 'The details are refused and the hand-off is held.',
   },
   HOLD_RELEASE: {
-    title: 'Release the payment hold',
-    ask: 'A payment hold was placed on this deal. Release it when Finance is satisfied.',
-    why: 'Only Finance can release a hold.',
-    approve: 'The hold is released.',
-    reject: 'The hold stays in place.',
+    title: 'Confirm bank details and release payment',
+    ask: 'The supplier has sent its onboarding details. Check the bank details are genuine, then release the payment hold.',
+    why: 'Changed or new bank details are a common fraud route, and releasing payment is final, so one buyer decision covers both.',
+    approve: 'The bank details are accepted and the payment hold is released.',
+    reject: 'The hold stays in place and no payment is released.',
   },
   MANDATE_BREACH: {
     title: 'An agent tried to exceed its limits',
@@ -220,7 +220,7 @@ export interface NextStep { headline: string; detail: string; tone: 'ok' | 'warn
 export interface NextStepInput { status: string; stage: string; outcome: string | null | undefined; pendingKinds: { kind: string; role: string }[]; lost: boolean; role?: string; reason?: string | null }
 
 /** Demo roles offered on the login page, one per approver role, so a newcomer knows where to go next. */
-const DEMO_ACCOUNT: Record<string, string> = { BUYER: 'Buyer', COMPLIANCE: 'Compliance', QUALITY: 'Quality', LEGAL: 'Legal', FINANCE: 'Finance' };
+const DEMO_ACCOUNT: Record<string, string> = { BUYER: 'Buyer' };
 
 /** What a person should read first on a project: what is happening and what happens next. */
 export function nextStep(i: NextStepInput): NextStep {

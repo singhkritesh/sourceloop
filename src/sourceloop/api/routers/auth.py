@@ -143,6 +143,7 @@ async def login(request: Request, body: Credentials, response: Response, db: Asy
 
 
 DEMO_DOMAIN = "@sourceloop.test"  # accounts created by `python -m sourceloop.seed`; nothing else is ever offered here
+DEMO_ROLES = (R.BUYER, R.SUPPLIER, R.ADMIN, R.SUPER_ADMIN)  # the roles the app offers; legacy approver users in an old database are never listed
 
 
 class DemoLogin(BaseModel):
@@ -157,7 +158,7 @@ async def demo_roles(request: Request, db: AsyncSession = Depends(get_session)) 
     if not deps.settings_of(request).demo_role_login:
         return {"enabled": False, "accounts": []}
     rows = (await db.execute(select(User, Organization).join(Organization, Organization.id == User.org_id)
-                             .where(User.email.like(f"%{DEMO_DOMAIN}")).order_by(User.email))).all()
+                             .where(User.email.like(f"%{DEMO_DOMAIN}"), User.role.in_(DEMO_ROLES)).order_by(User.email))).all()
     return {"enabled": True, "accounts": [{"email": u.email, "role": u.role.value, "org": o.name, "org_kind": o.kind.value} for u, o in rows]}
 
 
@@ -169,7 +170,7 @@ async def demo_login(request: Request, body: DemoLogin, response: Response, db: 
         raise ApiError(404, "NOT_FOUND", "not found")
     email = body.email.strip().lower()
     row = (await db.execute(select(User, Organization).join(Organization, Organization.id == User.org_id)
-                            .where(User.email == email))).first() if email.endswith(DEMO_DOMAIN) else None
+                            .where(User.email == email, User.role.in_(DEMO_ROLES)))).first() if email.endswith(DEMO_DOMAIN) else None
     if row is None:
         raise ApiError(404, "NOT_FOUND", "not found")
     log.warning("auth.demo_login", role=row[0].role.value)  # audible in logs: password-less sign-in happened

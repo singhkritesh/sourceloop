@@ -86,7 +86,7 @@ function Team({ orgId, editable }: { orgId?: string; editable: boolean }) {
               <select id="nu-r" className="select" value={role} onChange={(e) => setRole(e.target.value as Role)}>{roles.map((r) => <option key={r} value={r}>{roleTitle(r)}</option>)}</select></div>
             <div className="field"><label>&nbsp;</label><button className="btn primary" disabled={add.isPending || !email.trim()}>{add.isPending ? 'Adding…' : 'Add person'}</button></div>
           </div>
-          <p className="hint">They get a one-time password to sign in with. {info.data?.kind === 'BUYER' ? 'Buyer roles: Buyer starts projects; Compliance, Quality, Legal and Finance approve their own checkpoints; the Organization admin manages this page.' : 'Supplier roles: Supplier sees the requests it was invited to; the Organization admin manages this page.'}</p>
+          <p className="hint">They get a one-time password to sign in with. {info.data?.kind === 'BUYER' ? 'Buyer roles: Buyer starts projects and makes every decision; the Organization admin manages this page and sets rules, but never approves.' : 'Supplier roles: Supplier sees the requests it was invited to; the Organization admin manages this page.'}</p>
         </form>
       )}
       {secret && <Secret {...secret} onClose={() => setSecret(null)} />}

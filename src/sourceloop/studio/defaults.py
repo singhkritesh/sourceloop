@@ -26,6 +26,7 @@ DEFAULT_CHAT = "qwen3.8:27b-mlx"
 # Bootstrap only: seed publishes config v1 from this. After that the pinned config version rules (Studio edits it).
 # install-mac.sh sets both to a 4b model so a laptop never needs the large default.
 ENV_FAST, ENV_CHAT = "SL_FAST_MODEL", "SL_CHAT_MODEL"
+# Docker reaches the host's Ollama as host.docker.internal; docker-compose passes that as OLLAMA_BASE_URL, so the first config points there too
 
 
 # today's hard-coded tool timeouts (subagents/*_tools.py), so the default config changes no behaviour
@@ -39,7 +40,7 @@ def default_config() -> StudioConfig:
         "chat": ModelDef(provider="ollama", model=os.environ.get(ENV_CHAT) or DEFAULT_CHAT, timeout_s=120, max_tokens=1024),
     }
     return StudioConfig(
-        providers={"ollama": ProviderDef(kind=ProviderKindEnum.OLLAMA, base_url=OLLAMA_URL, is_local=True)},
+        providers={"ollama": ProviderDef(kind=ProviderKindEnum.OLLAMA, base_url=os.environ.get("OLLAMA_BASE_URL") or OLLAMA_URL, is_local=True)},
         llm=LlmSection(mode="replay", roles=models),
         agents={k: AgentDef(timeout_s=_TOOL_TIMEOUTS.get(k, 20)) for k in AGENT_KEYS},
         prompts={k: PromptDef(body=b) for k, b in DEFAULT_BODIES.items()},

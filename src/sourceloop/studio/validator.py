@@ -59,13 +59,13 @@ class ValidationReport:
 
 
 def classify_host(host: str) -> str:
-    """'metadata' | 'private' | 'public' | 'invalid'. Pure (no DNS): names other than localhost count as public."""
+    """'metadata' | 'private' | 'public' | 'invalid'. Pure (no DNS): names other than localhost and Docker's host alias count as public."""
     h = host.strip().lower().strip("[]")
     if not h:
         return "invalid"
     if h in _METADATA_HOSTS:
         return "metadata"
-    if h == "localhost" or h.endswith(".localhost"):
+    if h == "localhost" or h.endswith(".localhost") or h == "host.docker.internal":  # Docker's fixed alias for the machine running the containers
         return "private"
     try:
         ip = ipaddress.ip_address(h.split("%")[0])

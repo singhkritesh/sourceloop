@@ -16,7 +16,12 @@ from sourceloop.studio.invariants import check_invariants
 from sourceloop.studio.schema import StudioConfig
 from sourceloop.studio.validator import validate
 
-MANDATORY = {AK.TECHNICAL_QUAL, AK.AWARD, AK.SIGNATURE, AK.BANK_DETAILS, AK.HOLD_RELEASE}
+MANDATORY = {AK.AWARD, AK.HOLD_RELEASE}   # the human checkpoints that always remain (technical pass and signature are rule-settled)
+RULE_SETTLED = {AK.TECHNICAL_QUAL, AK.SIGNATURE, AK.BANK_DETAILS}
+
+
+def ask_need(c):
+    c["workflow"]["checkpoints"].update(requirement_confirmation=True)
 
 
 def cfg_with(mutate) -> StudioConfig:
@@ -43,16 +48,16 @@ def kinds(rt) -> set[AK]:
 
 # ---------------------------------------------------------------- workflow.autonomy
 async def test_autonomy_l3_on_need_auto_confirms_requirement_audited():
-    base = await build(default_config())
+    base = await build(cfg_with(ask_need))
     await run_to_completion(base)
     assert AK.REQUIREMENT in kinds(base)
-    rt = await build(cfg_with(lambda c: c["workflow"]["autonomy"].update(NEED=3)))
+    rt = await build(cfg_with(lambda c: (ask_need(c), c["workflow"]["autonomy"].update(NEED=3))))
     st = await run_to_completion(rt)
     assert st.status is PS.DONE and AK.REQUIREMENT not in kinds(rt) and MANDATORY <= kinds(rt)
     events = [e for e in await _events(rt) if e.action == "checkpoint_skipped"]
     assert events and events[0].rule_id == "autonomy_act_then_report" and events[0].outcome == "AUTO_CONFIRMED"
     # L1/L2 keep the human in the loop
-    rt2 = await build(cfg_with(lambda c: c["workflow"]["autonomy"].update(NEED=2)))
+    rt2 = await build(cfg_with(lambda c: (ask_need(c), c["workflow"]["autonomy"].update(NEED=2))))
     await run_to_completion(rt2)
     assert AK.REQUIREMENT in kinds(rt2)
 
@@ -68,7 +73,7 @@ def test_autonomy_ceiling_and_no_effect_warning():
 
 # ---------------------------------------------------------------- checkpoints.batched_async
 async def test_batched_async_defers_requirement_but_blocks_before_any_mandatory_checkpoint():
-    rt = await build(cfg_with(lambda c: c["workflow"]["checkpoints"].update(batched_async=True)))
+    rt = await build(cfg_with(lambda c: c["workflow"]["checkpoints"].update(requirement_confirmation=True, batched_async=True)))
     await RunExecutor(rt).run()
     assert rt.state.status is PS.ESCALATED and rt.state.longlist  # discovery already ran
     assert kinds(rt) == {AK.REQUIREMENT}                          # and nothing mandatory was raised yet
@@ -78,13 +83,13 @@ async def test_batched_async_defers_requirement_but_blocks_before_any_mandatory_
     st = await run_to_completion(rt)
     assert st.status is PS.DONE and MANDATORY <= kinds(rt) and AK.REQUIREMENT in kinds(rt)
     # default: the same run blocks BEFORE discovery
-    rt0 = await build(default_config())
+    rt0 = await build(cfg_with(ask_need))
     await RunExecutor(rt0).run()
     assert not rt0.state.longlist
 
 
 async def test_batched_async_rejection_stops_the_run():
-    rt = await build(cfg_with(lambda c: c["workflow"]["checkpoints"].update(batched_async=True)))
+    rt = await build(cfg_with(lambda c: c["workflow"]["checkpoints"].update(requirement_confirmation=True, batched_async=True)))
     ex = RunExecutor(rt)
     await ex.run()
     a = rt.approvals.pending(rt.project_id)[0]
@@ -199,9 +204,8 @@ async def test_no_invariant_checkpoint_is_skippable_through_any_wired_field(scen
     got = kinds(rt)
     assert extra <= got
     assert MANDATORY <= got or st.status is PS.STOPPED  # a stop is fine; skipping a gate is not
-    roles = {a.kind: a.target_role.value for a in rt.approvals.all(rt.project_id)}
-    assert roles.get(AK.TECHNICAL_QUAL, "QUALITY") == "QUALITY" and roles.get(AK.HOLD_RELEASE, "FINANCE") == "FINANCE"
-    assert roles.get(AK.SIGNATURE, "LEGAL") == "LEGAL" and roles.get(AK.COMPLIANCE_FLAG, "COMPLIANCE") == "COMPLIANCE"
+    assert all(a.target_role.value == "BUYER" for a in rt.approvals.all(rt.project_id))   # never an admin, never another role
+    assert not got & RULE_SETTLED
     if st.status is PS.DONE:
         assert AK.HOLD_RELEASE in got and rt.state.hold == "HELD"  # never released by an agent or a config field
     ok, _ = await rt.audit.verify(rt.project_id)
@@ -242,11 +246,11 @@ async def test_new_fields_apply_to_new_projects_only_via_pinned_version(w):  # n
     done_new, done_old = await run_to_done(w, new["id"]), await run_to_done(w, old["id"])
     assert done_old["outcome"] == "DEAL" and done_new["outcome"] == "NO_DEAL"   # supplier turns capped only in v2
     ks = {pid: {a["kind"] for a in (await b.get(f"/projects/{pid}/escalations")).json()["items"]} for pid in (new["id"], old["id"])}
-    assert "REQUIREMENT" in ks[old["id"]] and "REQUIREMENT" not in ks[new["id"]]
+    assert "REQUIREMENT" not in ks[old["id"]] and "REQUIREMENT" not in ks[new["id"]]   # off by default (v1); auto-confirmed by autonomy (v2)
 
 
 async def test_batched_async_through_the_api_resolves_while_running(w):  # noqa: F811
-    await _publish(w, lambda c: c["workflow"]["checkpoints"].update(batched_async=True), "batched")
+    await _publish(w, lambda c: c["workflow"]["checkpoints"].update(requirement_confirmation=True, batched_async=True), "batched")
     p = await _create(w)
     assert w.service.handles[p["id"]].rt.cfg.batched_async is True
     b = await w.client("buyer")

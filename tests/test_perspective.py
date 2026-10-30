@@ -32,7 +32,7 @@ async def test_buyer_overview_tells_the_business_story_without_the_agent_workflo
         assert [m["stage"] for m in o["milestones"]][-1] in ("DONE", "ONBOARDING")
         text = json.dumps(o).lower()
         assert not [x for x in WORKFLOW_WORDS if x in text], (who, [x for x in WORKFLOW_WORDS if x in text])
-        assert {d["kind"] for d in o["decisions"]} >= {"REQUIREMENT", "AWARD", "SIGNATURE"}
+        assert {d["kind"] for d in o["decisions"]} >= {"AWARD"}
 
 
 async def test_business_users_are_refused_the_raw_agent_workflow_and_run_internals(w):  # noqa: F811
@@ -108,7 +108,7 @@ async def test_org_admin_sees_every_checkpoint_of_its_org_but_resolves_only_oper
     r = await oa.post(f"/approvals/{first['id']}/resolve", {"status": "APPROVED", "version": first["version"]})
     assert r.status_code == 403          # the buyer's checkpoint is the buyer's decision
     assert (await (await w.client("sup_admin")).get(f"/approvals?project_id={pid}")).json()["items"] == []
-    assert await resolve_all(w, pid, only={"REQUIREMENT"}) == 1
+    assert await resolve_all(w, pid, only={"COMPLIANCE_FLAG"}) == 1
 
 
 async def test_overview_before_the_run_and_mid_run_is_sparse_not_an_error(w):  # noqa: F811
@@ -120,8 +120,8 @@ async def test_overview_before_the_run_and_mid_run_is_sparse_not_an_error(w):  #
     await b.post(f"/projects/{pid}/start")
     await w.service.join(pid)
     mid = (await b.get(f"/projects/{pid}/overview")).json()                                      # parked at the first checkpoint
-    assert [(d["kind"], d["status"], d["role"]) for d in mid["decisions"]] == [("REQUIREMENT", "PENDING", "BUYER")] and mid["award"] is None
-    await resolve_all(w, pid, only={"REQUIREMENT"})
+    assert [(d["kind"], d["status"], d["role"]) for d in mid["decisions"]] == [("COMPLIANCE_FLAG", "PENDING", "BUYER")] and mid["award"] is None
+    await resolve_all(w, pid, only={"COMPLIANCE_FLAG"})
     await w.service.join(pid)
     later = (await b.get(f"/projects/{pid}/overview")).json()
     assert later["candidates"] and all(c["awarded"] is False for c in later["candidates"]) and later["milestones"]

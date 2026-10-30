@@ -34,7 +34,7 @@ export function Welcome({ role }: { role?: string }) {
     ? [
       ['Describe the need', 'Start a project and say what you want to buy.'],
       ['Agents do the legwork', 'Your agent finds and screens suppliers, requests quotes and negotiates for you, within the limits you set.'],
-      ['You make the big calls', 'The run pauses for a person at compliance flags, technical pass / fail, the award, contract clauses, bank details and payment release.'],
+      ['You make the big calls', 'The agents run on their own. They stop for you only when a supplier is flagged, to choose the winner, if a protected contract clause is touched, and at the end to confirm bank details and release payment.'],
       ['Everything is on the record', 'Every step is recorded and every decision is attributed to the person who made it.'],
     ]
     : role === 'SUPPLIER'

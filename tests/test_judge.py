@@ -168,3 +168,23 @@ async def test_release_runs_even_when_the_run_is_cancelled_or_crashes(w):  # noq
         release = [boom, rel]
     await ProjectService._release_models(H2())    # a failing unload never raises and does not stop the others
     assert done == [1, 1]
+
+
+# ---- need intake: in a live run the typed text, not a sample need, drives the run
+async def test_need_intake_reads_the_typed_need_and_refuses_what_it_cannot_place():
+    import pytest as _pt
+
+    from sourceloop.llm.client import LLMClient
+    from sourceloop.llm.config import stub_config
+    from sourceloop.subagents.need_intake import NeedUnclear, read_need
+
+    def llm(out):
+        return LLMClient(stub_config(), {"stub": StubProvider(handlers={"purchase request": lambda u: out})})
+    got = await read_need(llm({"category": "connectors", "volume_units": 2000, "required_certs": ["ISO9001", "ISO9001", "UL"],
+                               "excluded_countries": ["RU"], "max_lead_time_weeks": 6, "target_unit_price": "12.5"}), "p1", "2,000 connectors, UL")
+    assert got == {"category": "connectors", "industry": "high_tech", "required_certs": ["ISO9001", "UL"], "excluded_countries": ["RU"],
+                   "volume_units": 2000, "max_lead_time_weeks": 6, "target_price": "12.5"}
+    for bad in ({"category": "none"}, {"category": "laptops"}, {"category": "connectors", "required_certs": ["MADE_UP"]},
+                {"category": "connectors", "volume_units": -5}, {"category": "connectors", "price": "cheap"}):
+        with _pt.raises(NeedUnclear):
+            await read_need(llm(bad), "p1", "whatever")

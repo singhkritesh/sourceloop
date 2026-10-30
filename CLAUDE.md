@@ -85,7 +85,7 @@ Full schema: TRD §3. Enums live in `data/enums.py` — import them, never type 
 
 ## 6. Authentication & Authorization
 
-Roles: `BUYER, SUPPLIER, COMPLIANCE, QUALITY, LEGAL, FINANCE, EVALUATOR, DESIGNER, ADMIN, SUPER_ADMIN`. Middleware = `api/deps.py`.
+Roles: `BUYER, SUPPLIER, ADMIN, SUPER_ADMIN` are the ones the app creates and offers (the login page is a role picker, `DEMO_ROLE_LOGIN`, never in prod). `COMPLIANCE, QUALITY, LEGAL, FINANCE, EVALUATOR, DESIGNER` remain in the enum for old data and tests but own no checkpoint. **Every human checkpoint belongs to the BUYER user (`orchestrator/approvals.py KIND_ROLE`); admins set rules and mediate, they never approve.** Middleware = `api/deps.py`.
 **`ADMIN` is an ORGANIZATION admin (one buyer or supplier org); `SUPER_ADMIN` is SBN's platform operator (all access).** Every login sees a project from its own side only: business users (buyer-side roles, suppliers) get `/projects/{id}/overview` and are refused the raw agent workflow (`/messages`, `/audit`, `/stream`, `/activity` = 403); inspectors (`SUPER_ADMIN`, `EVALUATOR`, and an `ADMIN` for its own organization's side) get the workflow. Use `deps.supplier_scoped(p)` (a supplier user OR a supplier org's admin) instead of `p.role is R.SUPPLIER`, and `deps.INSPECTORS` for workflow routes. Full matrix: `docs/05-roles-and-perspectives.md`; `tests/test_authz_matrix.py` is the spec: a new route must be added there.
 
 ```python
@@ -131,6 +131,7 @@ Auth failure: 401 `{"error":{"code":"UNAUTHENTICATED"}}`. Refresh is deduplicate
 18. **Never return or log secrets.** Config endpoints return `"****"`. No tokens, passwords, keys, cross-side thresholds, or raw web text in logs.
 19. **Outbound HTTP only via `net/safe_http`** (host allowlist, block private IPs, no auto-redirects, 2 MB cap). Supplier-supplied URLs are never fetched.
 20. **Scope guardrail:** touch only `/Users/kritesh/Code/SAP`. If a task needs another repo/dir, stop and ask. **Port rule:** report any new port (API 8005, web 3010 today) so the user can update their global registry.
+21c. **The typed need drives a live run.** `subagents/need_intake.py` has the fast model read the buyer's text (wrapped as untrusted, schema-extracted, every value checked against the registry's own lists); an unclear need fails with 422 `NEED_UNCLEAR`, it never falls back to a sample. Replay mode (tests) still builds from the sample needs. Default runtime mode for installs is `live` with a 4b local model.
 21a. **Every negotiation turn goes through the judge** (`policy/judge.py`, called from `RunExecutor._judged`): audit `negotiation_judged` first, then deliver. Verdicts cross the side boundary as codes and plain sentences, never prices. A reviewer LLM may only add a concern (`combine`), never end a negotiation or soften a code verdict.
 21b. **Bus identity:** channels are minted a per-run capability (`MessageBus.enable_identity` must be called in `build_project` before any `AgentChannel` exists). Test-bed scope: no MFA, no key rotation (docs/security-roadmap.md).
 21. **Clarify before changing** the stage/message model, mandate shape or trust boundary; update `docs/` in the same change.
@@ -238,7 +239,7 @@ timeout = cfg.agents[agent_key].timeout_s
 - Don't use the Ollama SDK for `keep_alive` → direct httpx.
 - Don't create engines/sessions outside `data/db.py`.
 - Don't read user-changeable config from `os.environ` only → DB setting first.
-- Don't skip the human for: compliance flags, technical pass/fail, award, locked clauses (`liability`, `termination`, `ip`), signature, bank details, hold release.
+- Human-in-the-loop only where it is truly needed (owner rule: minimal intervention, agent-to-agent). The remaining checkpoints are code-owned and the buyer user's: a flagged supplier (`COMPLIANCE_FLAG`, only when something is flagged), the award, a changed locked clause (`liability`, `termination`, `ip`, only when one is touched) and ONE final decision that confirms bank details and releases the payment hold. Technical pass/fail and signature are settled by rules and recorded as `checkpoint_skipped` (never silent); requirement confirmation is off by default (`workflow.checkpoints.requirement_confirmation`). Don't add a human gate for something a rule can settle, and don't let a config field switch off the ones that remain.
 - Don't hardcode ports or add new ones silently → tell the user.
 
 ## 10. Verifying Your Work

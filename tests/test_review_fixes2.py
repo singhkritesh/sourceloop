@@ -64,7 +64,7 @@ async def test_done_project_is_evicted_after_last_checkpoint(w):  # noqa: F811
     assert (await run_to_done(w, pid))["status"] == "DONE"
     assert pid in w.service.handles  # finance HOLD_RELEASE still open
     left = await pending(w, pid)
-    fin = await w.client("finance")
+    fin = await w.client("buyer")
     assert (await fin.post(f"/approvals/{left[0]['id']}/resolve", {"status": "APPROVED", "version": left[0]["version"]})).status_code == 200
     assert pid not in w.service.handles
 
@@ -400,8 +400,8 @@ async def test_waiver_revoked_when_redline_raises(w):  # noqa: F811
         if not items:
             break
         for a in items:
-            c = await w.client({"REQUIREMENT": "buyer", "COMPLIANCE_FLAG": "compliance", "TECHNICAL_QUAL": "quality", "AWARD": "buyer",
-                                "CLAUSE": "legal", "SIGNATURE": "legal", "BANK_DETAILS": "finance", "HOLD_RELEASE": "finance",
+            c = await w.client({"REQUIREMENT": "buyer", "COMPLIANCE_FLAG": "buyer", "TECHNICAL_QUAL": "buyer", "AWARD": "buyer",
+                                "CLAUSE": "buyer", "SIGNATURE": "buyer", "BANK_DETAILS": "buyer", "HOLD_RELEASE": "buyer",
                                 "MANDATE_BREACH": "buyer", "LOW_CONFIDENCE": "buyer"}[a["kind"]])
             body = {"status": "APPROVED", "version": a["version"]}
             if a["kind"] == "CLAUSE":

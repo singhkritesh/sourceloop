@@ -138,9 +138,10 @@ class PromptDef(_Section):
 
 
 class CheckpointCfg(_Section):
-    # Only non-invariant checkpoints are configurable. Compliance flags, technical qualification, award, locked
-    # clauses, signature, bank details and hold release are always human (invariants, no field here).
-    requirement_confirmation: bool = Field(True, json_schema_extra=W("switch"))
+    # Only the requirement confirmation is configurable (off by default: the buyer typed the need). Human checkpoints that remain
+    # are code-owned and always the buyer user: compliance flags (only when a supplier is flagged), the award, a changed locked
+    # clause (only when one is touched) and the final bank-details + payment release. Technical pass/fail and signature are rule-settled.
+    requirement_confirmation: bool = Field(False, json_schema_extra=W("switch"))
     batched_async: bool = Field(False, json_schema_extra=W(
         "switch", help="Requirement confirmation no longer blocks discovery; it must be resolved before the first mandatory checkpoint. "
                        "Mandatory checkpoints are never batched."))

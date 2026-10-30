@@ -114,24 +114,26 @@ async def test_scenario_and_negotiation_come_from_the_pinned_config(w):  # noqa:
     assert done["outcome"] == "NO_DEAL"  # the custom scenario's factors replace the built-in ones
 
 
-async def test_requirement_checkpoint_can_be_skipped_but_mandatory_ones_cannot(w):  # noqa: F811
-    r = await publish_change(w, lambda c: c["workflow"]["checkpoints"].update(requirement_confirmation=False))
-    assert r.status_code == 201
+async def test_requirement_checkpoint_is_off_by_default_and_can_be_switched_on(w):  # noqa: F811
     p = await new_project(w)
     b = await w.client("buyer")
     await b.post(f"/projects/{p['id']}/start")
     await w.service.join(p["id"])
-    kinds = [a["kind"] for a in (await b.get(f"/projects/{p['id']}/escalations")).json()["items"]]
-    assert "REQUIREMENT" not in kinds  # not asked
+    first = [a["kind"] for a in (await b.get(f"/projects/{p['id']}/escalations")).json()["items"]]
+    assert "REQUIREMENT" not in first  # the buyer typed the need, so it is not asked back
     done = await run_to_done(w, p["id"])
     assert done["status"] == "DONE"
-    kinds = set()
-    for who in ("buyer", "quality", "legal", "finance"):  # /escalations is role-scoped (F8): union over the roles
-        c = await w.client(who)
-        kinds |= {a["kind"] for a in (await c.get(f"/projects/{p['id']}/escalations")).json()["items"]}
-    assert {"TECHNICAL_QUAL", "AWARD", "SIGNATURE", "BANK_DETAILS"} <= kinds  # mandatory human checkpoints remain
+    kinds = {a["kind"] for a in (await b.get(f"/projects/{p['id']}/escalations")).json()["items"]}
+    assert {"AWARD", "HOLD_RELEASE"} <= kinds  # the human checkpoints that remain, all the buyer user's
+    assert not kinds & {"TECHNICAL_QUAL", "SIGNATURE", "BANK_DETAILS"}  # rule-settled, audited
     audit = (await (await w.client("evaluator")).get(f"/projects/{p['id']}/audit?limit=500")).json()["items"]
     assert any(i["action"] == "checkpoint_skipped" for i in audit)  # the skip is audited, never silent
+    r = await publish_change(w, lambda c: c["workflow"]["checkpoints"].update(requirement_confirmation=True))
+    assert r.status_code == 201
+    p2 = await new_project(w)
+    await b.post(f"/projects/{p2['id']}/start")
+    await w.service.join(p2["id"])
+    assert "REQUIREMENT" in [a["kind"] for a in (await b.get(f"/projects/{p2['id']}/escalations")).json()["items"]]
 
 
 async def test_invariant_attempts_via_api_are_rejected_422(w):  # noqa: F811
@@ -345,7 +347,7 @@ async def _fixed_run_v2(tmp_path, i: int) -> tuple[str, int]:
 
 async def test_same_pinned_version_gives_identical_audit_hash(tmp_path):
     a, b = await _fixed_run_v2(tmp_path, 0), await _fixed_run_v2(tmp_path, 1)
-    assert a == b and a[1] > 100
+    assert a == b and a[1] > 80
 
 
 async def test_sql_audit_anchor_detects_truncation_of_a_project_log(w):  # noqa: F811

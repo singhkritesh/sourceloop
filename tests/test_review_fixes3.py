@@ -114,15 +114,15 @@ async def test_done_hold_release_resolvable_after_restart(w):  # noqa: F811
     w.service.handles.pop(pid, None)  # simulated restart: the runtime is gone, DONE projects are not closed by recover()
     fresh = type(w.service)(w.settings, Broker())
     await fresh.recover()
-    fin = await w.client("finance")
+    fin = await w.client("buyer")
     a = hold_items[0]
     r = await fin.post(f"/approvals/{a['id']}/resolve", {"status": "APPROVED", "version": a["version"]})
     assert r.status_code == 200 and r.json()["status"] == "APPROVED"
     async with dbm.get_sessionmaker()() as s:
         hold = (await s.execute(select(LedgerHold).where(LedgerHold.project_id == uuid.UUID(pid)))).scalar_one()
         evs = list((await s.execute(select(AuditEvent).where(AuditEvent.project_id == pid).order_by(AuditEvent.seq))).scalars())
-    assert hold.status.value == "RELEASED" and hold.released_by == str(w.ids["finance"])
-    assert evs[-1].action == "approval_resolved" and evs[-1].approver_id == str(w.ids["finance"])
+    assert hold.status.value == "RELEASED" and hold.released_by == str(w.ids["buyer"])
+    assert evs[-1].action == "approval_resolved" and evs[-1].approver_id == str(w.ids["buyer"])
     ev = await w.client("evaluator")
     assert (await ev.get(f"/projects/{pid}/audit/verify")).json()["valid"] is True
     again = await fin.post(f"/approvals/{a['id']}/resolve", {"status": "APPROVED", "version": a["version"]})
@@ -266,10 +266,8 @@ async def test_budget_exceeded_in_a_tool_pauses_the_run(w):  # noqa: F811
     b = await w.client("buyer")
     pid = (await b.post("/projects", {"title": "t"})).json()["id"]
     h = w.service.handles[pid]
-    await b.post(f"/projects/{pid}/start")
-    await w.service.join(pid)
     h.rt.llm.used[pid] = h.rt.llm.cfg.tokens_per_project  # the budget is spent: the first LLM-backed tool call must pause the run
-    await resolve_all(w, pid)
+    await b.post(f"/projects/{pid}/start")
     await w.service.join(pid)
     assert (await b.get(f"/projects/{pid}")).json()["status"] == "BUDGET_EXCEEDED"  # paused, not failed and not silently continued
 
@@ -412,7 +410,7 @@ async def test_hold_release_is_atomic_with_the_approval(w, monkeypatch):  # noqa
             if calls["n"] == 1:
                 raise RuntimeError("commit failed")  # first attempt rolls back BOTH the approval and the hold
     monkeypatch.setattr(dbm, "session_scope", flaky)
-    fin = await w.client("finance")
+    fin = await w.client("buyer")
     r = await fin.post(f"/approvals/{a['id']}/resolve", {"status": "APPROVED", "version": a["version"]})
     assert r.status_code == 200  # the retry succeeded
     async with dbm.get_sessionmaker()() as s:

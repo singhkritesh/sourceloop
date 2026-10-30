@@ -141,14 +141,14 @@ async def build_world(tmp: Path, *, fixed_ids: bool = False, **settings_kw: Any)
     return w
 
 
-ROLE_OF_KIND = {"REQUIREMENT": "buyer", "COMPLIANCE_FLAG": "compliance", "TECHNICAL_QUAL": "quality", "AWARD": "buyer",
-                "CLAUSE": "legal", "SIGNATURE": "legal", "BANK_DETAILS": "finance", "HOLD_RELEASE": "finance",
-                "MANDATE_BREACH": "buyer", "LOW_CONFIDENCE": "buyer", "RULE": "buyer"}
+# every human checkpoint is the buyer user's; admins never approve
+ROLE_OF_KIND = {k: "buyer" for k in ("REQUIREMENT", "COMPLIANCE_FLAG", "TECHNICAL_QUAL", "AWARD", "CLAUSE", "SIGNATURE", "BANK_DETAILS",
+                                     "HOLD_RELEASE", "MANDATE_BREACH", "LOW_CONFIDENCE", "RULE")}
 
 
 async def pending(w: World, pid: str) -> list[dict]:
     out: list[dict] = []
-    for key in ("buyer", "compliance", "quality", "legal", "finance"):
+    for key in ("buyer",):
         c = await w.client(key)
         r = await c.get(f"/approvals?status=PENDING&project_id={pid}")
         assert r.status_code == 200, r.text

@@ -102,22 +102,16 @@ def no_network_probe(monkeypatch):
 
 @pytest.fixture
 async def parked(w):  # noqa: F811
-    """A project parked at the TECHNICAL_QUAL checkpoint (suppliers are registered by then)."""
+    """A project parked at its first human checkpoint (every checkpoint is the buyer user's)."""
     pid = await create_and_start(w)
-    await resolve_all(w, pid)
-    await w.service.join(pid)
-    # compliance flags (if any) first, then we stop at technical qualification
-    for _ in range(3):
-        c = await w.client("quality")
-        items = (await c.get(f"/approvals?status=PENDING&project_id={pid}")).json()["items"]
-        if items:
-            return pid, items[0]["id"]
-        await resolve_all(w, pid, only={"COMPLIANCE_FLAG"})
-        await w.service.join(pid)
-    raise AssertionError("no quality checkpoint reached")
+    c = await w.client("buyer")
+    items = (await c.get(f"/approvals?status=PENDING&project_id={pid}")).json()["items"]
+    if items:
+        return pid, items[0]["id"]
+    raise AssertionError("no buyer checkpoint reached")
 
 
-ITEM_ROLE = {"/approvals/{aid}/resolve": R.QUALITY}  # the parked approval targets QUALITY
+ITEM_ROLE = {"/approvals/{aid}/resolve": R.BUYER}  # the parked approval targets the BUYER
 
 
 def expected(role: R, relation: str, allowed: tuple, scoped: bool, evaluator_write: bool, tmpl: str = "") -> set[str]:
@@ -187,9 +181,9 @@ async def test_evaluator_is_read_only(w, parked):  # noqa: F811
 
 
 async def test_resolve_wrong_role_vs_cross_tenant(w, parked):  # noqa: F811
-    pid, aid = parked  # a QUALITY item
+    pid, aid = parked  # a BUYER item
     body = {"status": "APPROVED", "version": 1}
-    assert (await (await w.client("buyer")).post(f"/approvals/{aid}/resolve", body)).status_code == 403  # visible, wrong role
+    assert (await (await w.client("org_admin")).post(f"/approvals/{aid}/resolve", body)).status_code == 403  # visible, but admins never approve
     assert (await (await w.client("admin")).post(f"/approvals/{aid}/resolve", body)).status_code == 403  # SUPER_ADMIN cannot approve QUALITY items
     assert (await (await w.client("org_admin")).post(f"/approvals/{aid}/resolve", body)).status_code == 403  # nor can the org admin
     assert (await (await w.client("buyer_b")).post(f"/approvals/{aid}/resolve", body)).status_code == 404  # other tenant
@@ -207,7 +201,7 @@ async def test_list_endpoints_are_scoped_in_sql(w, parked):  # noqa: F811
     assert [p["id"] for p in (await (await w.client("evaluator")).get("/projects")).json()["items"]] == [pid]
     # approvals inbox is role-scoped and tenant-scoped
     assert (await (await w.client("buyer_b")).get("/approvals")).json()["items"] == []
-    assert all(a["target_role"] == "QUALITY" for a in (await (await w.client("quality")).get("/approvals")).json()["items"])
+    assert all(a["target_role"] == "BUYER" for a in (await (await w.client("buyer")).get("/approvals")).json()["items"])
     assert (await (await w.client("supplier1")).get("/approvals")).status_code == 403
     sup = (await (await w.client("supplier1")).get(f"/projects/{pid}")).json()
     assert set(sup) == {"id", "title", "stage", "status", "outcome", "version", "created_at", "updated_at"}  # no brief / need text

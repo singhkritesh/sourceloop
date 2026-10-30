@@ -7,11 +7,10 @@ const TERMS: [string, string][] = [
   ['Qualification', 'Checking a supplier is allowed and able to deliver: valid certificates, not on a sanctions list, acceptable risk.'],
   ['Request for quote (RFQ)', 'The invitation to suppliers to offer a price and lead time for what you need.'],
   ['Negotiation', 'A few rounds of offers and counter-offers within the limits. A conduct check reviews each turn for things like going backwards or ignoring the other side.'],
-  ['Needs a decision (escalation)', 'The run stopped because a person must decide: compliance flags, technical pass or fail, the award, protected contract clauses, bank details, releasing payment.'],
+  ['Needs a decision (escalation)', 'The run stopped because a person must decide. That happens only for a flagged supplier, the award, a changed protected contract clause, and the final bank-details and payment release. Everything else the agents and rules handle.'],
   ['Audit record', 'A tamper-evident log of every step. Each entry is chained to the previous one, so any change is detectable. \u201cVerified\u201d means the chain is intact.'],
-  ['Demo mode (replay)', 'The agents replay pre-recorded answers so runs are repeatable. Live mode asks a local AI model instead.'],
-  ['Scenario', 'A prepared story to try: a normal deal, no overlap in limits, an attack in a news article, and so on.'],
-  ['Studio', 'The configuration editor for designers and administrators: models, wording, rules and clauses. Safety rules cannot be changed there.'],
+  ['Live and replay', 'Live runs ask a local AI model, and what you type drives the run. Replay (used for tests) plays back recorded answers so a run is repeatable.'],
+    ['Studio', 'The configuration editor for designers and administrators: models, wording, rules and clauses. Safety rules cannot be changed there.'],
 ];
 
 export function Help() {
@@ -24,8 +23,8 @@ export function Help() {
         <p>SourceLoop shows how software agents could buy parts for a company. You say what you need; an agent finds suppliers, checks them, asks for quotes and negotiates. A person makes the big calls. Everything uses made-up data.</p>
         <h2>Try it in three steps</h2>
         <ol>
-          <li>On <b>Projects</b>, click <b>Run a sample project</b>.</li>
-          <li>Watch the progress bar at the top. When it says <b>Needs a decision</b>, click <b>Review and decide</b> and approve. Later steps wait for Compliance, Quality, Legal or Finance; the page names who, and Login lists their demo accounts.</li>
+          <li>On <b>Projects</b>, click <b>New sourcing project</b> and describe what you need, for example “500 PCB assemblies, IATF16949 and RoHS, delivered within 8 weeks, no suppliers in Turkey”.</li>
+          <li>Watch the progress bar at the top. When it says <b>Needs a decision</b>, click <b>Review and decide</b> and approve. Most steps need no one: you are asked only about a flagged supplier, the award, a changed protected clause and, at the end, bank details with payment release.</li>
           <li>When it says <b>Deal reached</b>, scroll down to see the suppliers, the price chart and the record of every step.</li>
         </ol>
         <h2>If something looks wrong</h2>

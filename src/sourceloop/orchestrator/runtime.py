@@ -71,7 +71,7 @@ class RunConfig:
     news_escalate_severity: float = 0.7
     news_min_confidence: float = 0.6
     config_version: int = 1
-    confirm_requirement: bool = True  # Studio workflow.checkpoints.requirement_confirmation (the only skippable checkpoint)
+    confirm_requirement: bool = False  # Studio workflow.checkpoints.requirement_confirmation (the only skippable checkpoint)
     need_autonomy: int = 1  # Studio workflow.autonomy[NEED]; >= 3 ("act then report") auto-confirms the requirement (audited)
     judge_llm: bool = False  # Studio workflow.negotiation.judge_llm: ask the reviewer model too (it can only add a concern)
     batched_async: bool = False  # Studio workflow.checkpoints.batched_async: requirement confirmation does not block discovery
@@ -204,6 +204,13 @@ class RunExecutor:
         if a.status is AS.PENDING:
             raise Paused(a)
         return a
+
+    async def _auto(self, kind: AK, key: str, rule_id: str, evidence: list[dict[str, Any]] | None = None) -> None:
+        """A checkpoint that needs no person: a rule already settled it. Audited once, never silent."""
+        if f"auto:{key}" in self.st.done:
+            return
+        self.st.done.add(f"auto:{key}")
+        await self._audit("checkpoint_skipped", rule_id=rule_id, evidence=evidence or [], outcome="AUTO_CONFIRMED")
 
     async def _once(self, key: str, coro_fn) -> Any:
         if key in self.st.done:
@@ -358,11 +365,9 @@ class RunExecutor:
         if not passed:
             raise Stopped(OutcomeEnum.NO_VIABLE_SUPPLIER, "none_qualified")
 
-        a = await self._gate(AK.TECHNICAL_QUAL, "tech", ("TECHNICAL_PASS_FAIL",), {"candidates": passed}, {"suggested": "pass all"})
-        failed = set(await self._edit_ids(a, "fail", fail_closed=True)) if a.status is AS.EDITED else set()
-        if a.status is AS.REJECTED:
-            raise Stopped(OutcomeEnum.NO_VIABLE_SUPPLIER, "technical_qualification_failed")
-        st.included = [s for s in passed if s not in failed]
+        # lead time, capacity, certificates and risk are already rule-checked above, so a clean candidate needs no second look
+        await self._auto(AK.TECHNICAL_QUAL, "tech", "technical_checks_passed_by_rules", [{"candidates": sorted(passed)}])
+        st.included = list(passed)
         scored = {c.supplier_id: c for c in st.longlist}
         pick = pick_shortlist([Scored(s, scored[s].country, scored[s].score, ()) for s in st.included if s in scored],
                               k=rt.cfg.shortlist_size, min_countries=rt.cfg.min_countries)
@@ -571,10 +576,8 @@ class RunExecutor:
         cid = sha256_hex(dumps(st.contract))[:32]
         cid = f"{cid[:8]}-{cid[8:12]}-{cid[12:16]}-{cid[16:20]}-{cid[20:32]}"
         r = await self._once("sign_request", lambda: rt.buyer.request_signature(sid, cid))
-        a = await self._gate(AK.SIGNATURE, "sign", ("SIGNATURE_REQUIRED",), {"contract": st.contract, "deviations": deviations},
-                             {"suggested": "sign"})
-        if a.status is AS.REJECTED:
-            raise Stopped(OutcomeEnum.STOPPED_BY_USER, "signature_rejected")
+        # the buyer already approved the award and any locked-clause change, so signing the agreed contract needs no new decision
+        await self._auto(AK.SIGNATURE, "sign", "signature_follows_approved_award", [{"contract": cid, "deviations": deviations}])
         st.contract["signature_hash"] = sha256_hex(dumps(st.contract) + "|simulated-signature")
 
     async def _stage_onboarding(self) -> None:
@@ -583,9 +586,8 @@ class RunExecutor:
         assert sid is not None
         await self._once("onboard", lambda: rt.suppliers[sid].agent.send_onboarding())
         self._buyer_inbox({T.ONBOARD_DATA})
-        a = await self._gate(AK.BANK_DETAILS, "bank", ("CONFIRM_BANK_DETAILS",), {"supplier": sid}, {"suggested": "confirm"})
-        if a.status is AS.REJECTED:
-            raise Stopped(OutcomeEnum.STOPPED_BY_USER, "bank_details_rejected")
+        # bank details and payment release are ONE buyer decision at the end: the supplier's details are shown with the release
         st.hold = "HELD"  # agents can never release this
-        await rt.approvals.ensure(rt.project_id, AK.HOLD_RELEASE, "hold", ("RELEASE_PAYMENT_HOLD",), {"supplier": sid}, {}, S.ONBOARDING.value)
+        await rt.approvals.ensure(rt.project_id, AK.HOLD_RELEASE, "hold", ("CONFIRM_BANK_DETAILS", "RELEASE_PAYMENT_HOLD"),
+                                  {"supplier": sid, "bank_details": "supplier-submitted onboarding details, confirmed with the release"}, {}, S.ONBOARDING.value)
         await self._audit("ledger_hold_created", outcome="HELD", evidence=[{"supplier": sid}])

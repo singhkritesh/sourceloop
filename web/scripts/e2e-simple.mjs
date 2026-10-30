@@ -11,6 +11,28 @@ const p = await b.newPage(); await p.setViewport({ width: 1280, height: 900 });
 const text = () => p.evaluate(() => document.body.innerText);
 const click = (label) => p.evaluate((l) => { const e = [...document.querySelectorAll('button,a')].find((x) => x.textContent.trim().includes(l)); if (e) e.click(); return !!e; }, label);
 const shot = (n) => p.screenshot({ path: `../data/ui/simple-${n}.png` });
+// A second person, without the browser: the awarded supplier's user confirms its final terms (found through the SBN admin's view).
+async function asUser(email) {
+  const r = await fetch(BASE + '/api/v1/auth/demo-login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email }) });
+  const jar = r.headers.getSetCookie().map((c) => c.split(';')[0]).join('; ');
+  const csrf = /csrf=([^;]+)/.exec(jar)?.[1] ?? '';
+  const call = (path, init = {}) => fetch(BASE + '/api/v1' + path, { ...init, headers: { 'content-type': 'application/json', cookie: jar, 'x-csrf-token': csrf }, body: init.body && JSON.stringify(init.body) });
+  return { get: async (path) => (await call(path)).json(), post: async (path, body) => call(path, { method: 'POST', body }) };
+}
+const supplierConfirmed = [];
+async function supplierWatch(until) {
+  const admin = await asUser('superadmin@sourceloop.test');
+  while (!until()) {
+    await sleep(3000);
+    const items = ((await admin.get('/approvals?status=PENDING')).items ?? []).filter((a) => a.kind === 'SUPPLIER_ACCEPT');
+    for (const a of items) {
+      const sup = await asUser(`supplier-${a.evidence.supplier.toLowerCase()}@sourceloop.test`);
+      const r = await sup.post(`/approvals/${a.id}/resolve`, { status: 'APPROVED', version: a.version });
+      if (r.status === 200) supplierConfirmed.push(a.evidence.supplier);
+    }
+  }
+}
+let finished = false;
 const NEED = 'We need 500 PCB assemblies certified IATF16949 and RoHS, delivered within 8 weeks. Please avoid suppliers in Turkey. Target price around 95 per unit.';
 try {
   await p.goto(BASE + '/login');
@@ -32,6 +54,7 @@ try {
   await p.waitForFunction(() => /\/projects\/[0-9a-f-]{36}/.test(location.pathname), { timeout: 20000 });
   const projectUrl = p.url();
   check('the typed need is shown back from what the model read', await p.waitForFunction(() => /pcb assembly/i.test(document.body.innerText) && /IATF16949/.test(document.body.innerText), { timeout: 20000 }).then(() => true, () => false));
+  const watcher = supplierWatch(() => finished);
   const asked = [];
   for (let i = 0; i < 6; i++) {
     await p.waitForFunction(() => /Your decision is needed|Deal reached/i.test(document.body.innerText), { timeout: 240000 }).catch(() => {});
@@ -43,8 +66,10 @@ try {
     await click('Approve'); await sleep(2500);
     await p.goto(projectUrl); await sleep(2000);
   }
+  finished = true; await watcher;
   await shot('deal');
   check('run reaches a deal', /Deal reached/i.test(await text()));
+  check('the awarded supplier confirmed its own terms (its user, not the buyer)', supplierConfirmed.length === 1, supplierConfirmed.join(','));
   check('the buyer was asked at most 3 times, and only for real decisions', asked.length >= 1 && asked.length <= 3, asked.join(' | '));
   // an SBN admin can see how the agents performed: which choices the model made, which fell back to the rule, and how sure it was
   await p.evaluate(() => document.querySelector('button[aria-label="Sign out"]')?.click());

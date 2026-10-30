@@ -115,10 +115,7 @@ Results are discussed in `docs/evaluation.md`; the adversarial suite is describe
 cd web && npm test && npm run build    # vitest (39 tests) + tsc strict + vite build
 ```
 
-Real-stack e2e (headless Chrome, fresh DB `data/e2e/e2e.db`, evidence in gitignored `data/e2e/`): start `cd web && npm run dev`, then `scripts/e2e-all.sh <tag>`
-(phases B N C C2 E D F F2 + determinism + `scripts/e2e-security.py` + smoke). The e2e API raises the per-user limits through `RATE_LIMIT_CREATE` /
-`RATE_LIMIT_START` / `RATE_LIMIT_RESOLVE` (defaults 10/hour, 5/hour, 60/minute stay in `api/config.py`; `e2e-security.py` checks the defaults answer 429 and
-uses a temporary port 8006 on a COPY of the e2e DB for the tamper, auth-throttle and prod-boot checks).
+Release check against the running Docker stack: `scripts/e2e-all.sh` (lint, import boundaries, backend and web tests, then the headless-Chrome journey `web/scripts/e2e-simple.mjs`: role picker, typed need, deal, the buyer's few decisions, the supplier's own confirmation, agent performance, help). It uses the local 4b model.
 
 `tests/test_live_ollama.py` runs only when a local Ollama with the model is reachable (otherwise skipped); the API live-path check is manual.
 

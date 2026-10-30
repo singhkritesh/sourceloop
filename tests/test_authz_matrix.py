@@ -39,6 +39,7 @@ ROUTES = [
     ("GET", "/projects/{pid}/audit", WORKFLOW, True, False),
     ("GET", "/projects/{pid}/overview", PROJECT_READERS, True, False),  # every login, from its own perspective
     ("GET", "/projects/{pid}/activity", INSPECTORS, True, False),  # how the agents behaved: inspectors only
+    ("GET", "/projects/{pid}/agent-performance", INSPECTORS, True, False),  # decisions, model-vs-rule, confidence, judge verdicts: inspectors only
     ("GET", "/projects/{pid}/audit/verify", (R.EVALUATOR, R.ADMIN, R.SUPER_ADMIN), True, False),
     ("GET", "/projects/{pid}/audit/export", (R.EVALUATOR, R.ADMIN, R.SUPER_ADMIN), True, False),
     ("GET", "/reviewers/override-rates", (R.ADMIN, R.EVALUATOR, R.SUPER_ADMIN), False, False),

@@ -156,4 +156,62 @@ async def activity(pid: uuid.UUID, p: Principal = Depends(require_role(*INSPECTO
     return {"items": items, "summary": summary}
 
 
+@router.get("/{pid}/agent-performance")
+async def agent_performance(pid: uuid.UUID, p: Principal = Depends(require_role(*INSPECTORS)), db: AsyncSession = Depends(get_session)) -> dict:
+    """How well the agents did their jobs on this project, measured from the audit record: per agent, how many choices the model made versus
+    the rule-based fallback, how often it agreed with the rule, how sure it was, how long it took, and how the conduct judge rated each side's
+    turns. Codes and probabilities only, never a price. An organization admin sees its own side's agents only."""
+    await get_visible_project(db, p, pid)
+    rows = list((await db.execute(select(AuditEvent).where(AuditEvent.project_id == str(pid), AuditEvent.action.in_(("agent_decision", "negotiation_judged")))
+                                  .order_by(AuditEvent.seq))).scalars())
+    mine: set[str] | None = None
+    if p.role is R.ADMIN and supplier_scoped(p):
+        mine = await own_supplier_ids(db, p, pid)
+    buyer_only = p.role is R.ADMIN and not supplier_scoped(p)
+
+    def visible(agent: str) -> bool:
+        if mine is not None:
+            return agent.startswith("supplier:") and agent.split(":", 1)[1] in mine
+        return not buyer_only or not agent.startswith("supplier:")
+
+    per: dict[str, dict[str, Any]] = {}
+
+    def slot(agent: str) -> dict[str, Any]:
+        return per.setdefault(agent, {"agent": agent, "decisions": 0, "model_chosen": 0, "rule_used": 0, "fallbacks": defaultdict(int), "agreed": 0,
+                                      "conf": [], "p": [], "ms": [], "tokens": 0, "judge": defaultdict(int)})
+    decisions: list[dict[str, Any]] = []
+    for r in rows:
+        ev = (r.evidence or [{}])[0] if isinstance(r.evidence, list) else {}
+        if r.action == "agent_decision":
+            agent = str(ev.get("agent", ""))
+            if not visible(agent):
+                continue
+            a = slot(agent)
+            a["decisions"] += 1
+            a["model_chosen" if ev.get("source") == "model" else "rule_used"] += 1
+            if ev.get("fallback"):
+                a["fallbacks"][str(ev["fallback"]).split(":")[0]] += 1
+            a["agreed"] += bool(ev.get("agrees_with_rule"))
+            a["conf"].append(float(ev.get("confidence", 0))), a["p"].append(float(ev.get("p_chosen", 0))), a["ms"].append(int(ev.get("ms", 0)))
+            a["tokens"] += int(ev.get("tokens", 0))
+            decisions.append({"seq": r.seq, "agent": agent, "round": ev.get("round"), "rule": ev.get("rule"), "chosen": ev.get("chosen"), "source": ev.get("source"),
+                              "agrees_with_rule": bool(ev.get("agrees_with_rule")), "p_chosen": ev.get("p_chosen"), "confidence": ev.get("confidence"),
+                              "fallback": ev.get("fallback"), "ms": ev.get("ms"), "model": ev.get("model")})
+        else:
+            actor, sid = ev.get("actor"), ev.get("supplier")
+            agent = "buyer" if actor == "buyer" else f"supplier:{sid}"
+            if visible(agent):
+                slot(agent)["judge"][r.outcome] += 1
+
+    def avg(v: list[float]) -> float | None:
+        return round(sum(v) / len(v), 3) if v else None
+    agents = []
+    for a in per.values():
+        n = a["decisions"]
+        agents.append({"agent": a["agent"], "decisions": n, "model_chosen": a["model_chosen"], "rule_used": a["rule_used"], "fallbacks": dict(a["fallbacks"]),
+                       "agreement_with_rule_pct": round(100 * a["agreed"] / n) if n else None, "avg_confidence": avg(a["conf"]), "avg_p_chosen": avg(a["p"]),
+                       "avg_ms": round(sum(a["ms"]) / len(a["ms"])) if a["ms"] else None, "tokens": a["tokens"], "judge": dict(a["judge"])})
+    return {"live_model_decisions": any(d["source"] == "model" for d in decisions), "agents": sorted(agents, key=lambda x: x["agent"]), "decisions": decisions[:300]}
+
+
 __all__ = ["router", "BUYER_SIDE", "ApiError"]

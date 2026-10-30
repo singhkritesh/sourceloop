@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { projects } from '../api/endpoints';
 import { AgentActivity } from '../components/AgentActivity';
+import { AgentPerformance } from '../components/AgentPerformance';
 import { BuyerOverview } from '../components/BuyerOverview';
 import { ProjectHeader } from '../components/ProjectHeader';
 import { SupplierOverview } from '../components/SupplierOverview';
@@ -10,7 +11,7 @@ import { ErrorBox, SkeletonList } from '../components/ui';
 import { isInspector, isSupplierScoped, useAuth } from '../state/auth';
 import { Workspace } from './Workspace';
 
-type Tab = 'overview' | 'workflow' | 'activity';
+type Tab = 'overview' | 'workflow' | 'activity' | 'performance';
 
 /** One project, seen from the viewer's own side. Business users get the business view only. Inspectors (SBN super admin / evaluator,
  *  an organization admin for its own side) also get the agent workflow and how each agent behaved. */
@@ -29,7 +30,7 @@ export function ProjectPage() {
   const supplierView = isSupplierScoped(me);
   const inspect = isInspector(me.role);
   const decisions = ov.data?.perspective === 'buyer' ? ov.data.decisions : [];
-  const tabs: [Tab, string][] = [['overview', 'Overview'], ['workflow', 'Agents & workflow'], ['activity', 'Agent activity']];
+  const tabs: [Tab, string][] = [['overview', 'Overview'], ['workflow', 'Agents & workflow'], ['activity', 'Agent activity'], ['performance', 'Agent performance']];
 
   return (
     <div className="projpage">
@@ -45,6 +46,7 @@ export function ProjectPage() {
             ov.data?.perspective === 'supplier' ? <SupplierOverview project={p} data={ov.data} /> : ov.data ? <BuyerOverview project={p} data={ov.data} /> : null
         )}
         {inspect && tab === 'workflow' && <Workspace project={p} supplierView={supplierView} />}
+        {inspect && tab === 'performance' && <AgentPerformance projectId={id} running={p.status === 'RUNNING'} />}
         {inspect && tab === 'activity' && <AgentActivity projectId={id} running={p.status === 'RUNNING'} />}
       </div>
     </div>

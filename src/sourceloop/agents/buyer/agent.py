@@ -11,6 +11,7 @@ from typing import Protocol
 
 from sourceloop.agents.common import contracts as K
 from sourceloop.agents.common import par
+from sourceloop.agents.common.deliberate import Deliberator, Move, Pick, RuleDeliberator
 from sourceloop.agents.common.tools import ToolRunner, TurnGuard
 from sourceloop.bus.bus import AgentChannel, Delivered, SendResult
 from sourceloop.bus.messages import Envelope
@@ -53,12 +54,14 @@ class BuyerAgent:
 
     def __init__(self, channel: AgentChannel, tools: ToolRunner, max_unit_price: Decimal, target_price: Decimal | None,
                  max_rounds: int, min_step_pct: Decimal, policy: BuyerPolicy | None = None,
-                 chooser: Chooser | None = None) -> None:
+                 chooser: Chooser | None = None, deliberator: Deliberator | None = None) -> None:
         self.ch, self.tools = channel, tools
         self.max_price, self.target = max_unit_price, target_price   # own mandate values: allowed to know
         self.max_rounds, self.min_step_pct = max_rounds, min_step_pct
         self.policy = policy or BuyerPolicy()
         self.chooser = chooser or RuleChooser()
+        self.deliberator: Deliberator = deliberator or RuleDeliberator()
+        self.last_pick: Pick | None = None
 
     def _guard(self) -> TurnGuard:
         return TurnGuard(max_calls=self.policy.max_tool_calls_per_turn)
@@ -115,6 +118,58 @@ class BuyerAgent:
             return "accept", None
         options = (price,)
         return "counter", options[self.chooser.choose(options, {"round": rnd})]
+
+    def moves(self, last_supplier_price: Decimal, my_last_counter: Decimal | None, rnd: int) -> list[Move]:
+        """The legal moves this round, the rule-based one FIRST. Every price is the code's: a counter stays above the agent's own previous
+        counter by the minimum step, below the supplier's price and at or below the agent's ceiling."""
+        action, price = self.decide(last_supplier_price, my_last_counter, rnd)
+        first = (Move("ACCEPT", "accept", last_supplier_price, f"Accept the supplier's latest price of {last_supplier_price}.") if action == "accept"
+                 else Move("WALK", "walk", None, "End the negotiation with this supplier without a deal.") if action == "walk" or price is None
+                 else Move("COUNTER_STEADY", "counter", price, f"Counter at {price}, the planned step towards the supplier."))
+        out = [first]
+        floor = (my_last_counter * (1 + self.min_step_pct / 100)).quantize(Q4) if my_last_counter is not None else None
+
+        def add(m: Move) -> None:
+            if all((m.kind, m.price) != (o.kind, o.price) for o in out):
+                out.append(m)
+        if first.kind != "accept" and last_supplier_price <= self.max_price:
+            add(Move("ACCEPT", "accept", last_supplier_price, f"Accept the supplier's latest price of {last_supplier_price}."))
+        if rnd < self.max_rounds and first.kind in ("counter", "accept"):
+            base = my_last_counter if my_last_counter is not None else (last_supplier_price * self.policy.opening_discount)
+            firm = min(self.max_price, (floor if floor is not None else (last_supplier_price * Decimal("0.85"))).quantize(Q4))
+            split = min(self.max_price, ((base + last_supplier_price) / 2).quantize(Q4))
+            for lab, pr, txt in (("COUNTER_FIRM", firm, "a firm counter that barely moves"), ("COUNTER_SPLIT", split, "a counter that splits the remaining gap")):
+                if pr < last_supplier_price and (my_last_counter is None or pr > my_last_counter) and (floor is None or pr >= floor):
+                    add(Move(lab, "counter", pr, f"Counter at {pr}: {txt}."))
+        if first.kind != "walk":
+            add(Move("WALK", "walk", None, "End the negotiation with this supplier without a deal."))
+        return out
+
+    async def deliberate(self, supplier_id: str, last_supplier_price: Decimal, my_last_counter: Decimal | None, rnd: int,
+                         extra: tuple[str, ...] = ()) -> tuple[str, Decimal | None]:
+        """Same contract as `decide`, but the choice among the legal moves goes to the deliberator (a model in a live run)."""
+        mv = self.moves(last_supplier_price, my_last_counter, rnd)
+        gap = (last_supplier_price - my_last_counter) / last_supplier_price * 100 if my_last_counter else None
+        situation = (f"You are the buyer. Round {rnd} of {self.max_rounds}.",
+                     f"The supplier's latest price is {last_supplier_price}; your ceiling is {self.max_price}"
+                     + (f", your target is {self.target}." if self.target is not None else "."),
+                     f"Your previous counter was {my_last_counter} (the remaining gap is {gap.quantize(Decimal('0.1'))}% of the supplier's price)."
+                     if my_last_counter is not None else "You have not countered yet.", *extra)
+        pick = await self.deliberator.pick("buyer", supplier_id, rnd, situation, mv)
+        self.last_pick = pick
+        m = mv[pick.index]
+        return m.kind, m.price
+
+    async def recommend_award(self, finalists: list[dict]) -> tuple[str, Pick]:
+        """Which finalist to recommend to the buyer's human. Menu = the finalists, cheapest landed cost first (the rule's choice). The human
+        still decides; this only changes which supplier is pre-selected and why."""
+        best = Decimal(str(finalists[0]["landed"]))
+        mv = [Move(f["supplier_id"], "award", None,
+                   f"{f['name']}: landed cost {((Decimal(str(f['landed'])) - best) / best * 100).quantize(Decimal('0.1'))}% above the cheapest, "
+                   f"delivery-delay risk {float(f['delay_p']):.0%}, lead time {f['lead']} weeks.") for f in finalists]
+        pick = await self.deliberator.pick("award", None, 0, ("The negotiations are finished. These suppliers made a final offer.",), mv)
+        self.last_pick = pick
+        return mv[pick.index].label, pick
 
     async def counter(self, supplier_id: str, last: Envelope, price: Decimal, rnd: int) -> SendResult:
         return await self.ch.send(T.COUNTER, f"supplier:{supplier_id}",

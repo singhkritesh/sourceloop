@@ -46,6 +46,16 @@ try {
   await shot('deal');
   check('run reaches a deal', /Deal reached/i.test(await text()));
   check('the buyer was asked at most 3 times, and only for real decisions', asked.length >= 1 && asked.length <= 3, asked.join(' | '));
+  // an SBN admin can see how the agents performed: which choices the model made, which fell back to the rule, and how sure it was
+  await p.evaluate(() => document.querySelector('button[aria-label="Sign out"]')?.click());
+  await p.waitForFunction(() => /Choose a role/i.test(document.body.innerText), { timeout: 15000 });
+  await p.evaluate(() => { [...document.querySelectorAll('button')].find((x) => /^SBN admin/.test(x.textContent.trim()))?.click(); });
+  await p.waitForFunction(() => /Sourcing projects/.test(document.body.innerText), { timeout: 15000 });
+  await p.goto(projectUrl); await sleep(1500);
+  await click('Agent performance'); await sleep(1500);
+  await p.waitForFunction(() => /Every decision|No model made a choice/i.test(document.body.innerText), { timeout: 15000 }).catch(() => {});
+  t = await text(); await shot('performance');
+  check('agent performance shows the model-vs-rule decisions', /Every decision/.test(t) && /by the model/.test(t) && /Buyer agent/.test(t), t.includes('Every decision') ? '' : t.slice(0, 120));
   await p.goto(BASE + '/help'); await sleep(800); t = await text();
   check('help page has glossary', /Glossary/i.test(t) && /Orchestrator/.test(t)); await shot('help');
 } finally { await b.close(); }

@@ -20,3 +20,22 @@ JUDGE_STATE = "Actor: {{actor}}\nAction: {{action}}\nRound {{round}} of {{max_ro
 JUDGE_OPTIONS = {"APPROPRIATE": "normal, good-faith bargaining", "CONCERN": "questionable conduct worth a human look",
                  "INAPPROPRIATE": "clearly bad faith or irrational conduct"}
 JUDGE_VARS = frozenset({"actor", "action", "round", "max_rounds", "move_line", "gap_line", "index_line"})
+
+
+# ---- agent moves: the model chooses ONE of the moves the code lists (it can never name a price). Code-owned, not Studio-editable.
+MOVE_RUBRIC_BUYER = (
+    "You are the negotiating agent of a buyer. Pick the single best next move from the list. Every move is already inside the buyer's limits. "
+    "Aim for a good price without losing a supplier that is still willing to move: prefer to keep bargaining while the supplier keeps conceding "
+    "and time remains, accept when the price is good for the remaining rounds, and walk away only when no progress is possible."
+)
+MOVE_RUBRIC_SUPPLIER = (
+    "You are the negotiating agent of a supplier. Pick the single best next move from the list. Every move is already inside the supplier's limits. "
+    "Protect your margin but do not lose a reasonable deal: concede gradually while the buyer is moving, accept when the price is acceptable "
+    "for the remaining rounds, and walk away only when no agreement is possible."
+)
+MOVE_STATE = "{{situation}}"
+MOVE_VARS = frozenset({"situation"})
+AWARD_RUBRIC = (
+    "You advise a buyer on which supplier should win the contract. Pick the supplier with the best overall value: a lower landed cost is better, "
+    "a lower delivery-delay risk is better, a shorter lead time is better. Do not pick a supplier only because it is first in the list."
+)

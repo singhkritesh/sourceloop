@@ -29,7 +29,8 @@ fi
 ok "API healthy"
 
 # seed only when there are no users yet; keep the one-time credentials
-if [ ! -f data/demo-creds.txt ]; then
+# (a creds file left over from a wiped database must not block it: the picker listing no accounts means nothing is seeded)
+if [ ! -f data/demo-creds.txt ] || curl -s localhost:8005/api/v1/auth/demo-roles | grep -q '"enabled":true,"accounts":\[\]'; then
   info "Seeding demo data"
   $SEED 2>&1 | grep -v warning | tee data/demo-creds.txt >/dev/null || true
 fi

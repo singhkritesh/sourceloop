@@ -8,9 +8,11 @@ record for what is shown to users, and the audit log is written first (SQL store
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import functools
 import hashlib
 import json
+import secrets
 import time
 import types
 import uuid
@@ -58,6 +60,7 @@ from sourceloop.data.models import (
     RevokedToken,
     SubagentCall,
     Supplier,
+    User,
     WatchlistEntry,
 )
 from sourceloop.data.registry import Registry, SupplierRec, WatchEntry
@@ -267,6 +270,9 @@ class ProjectService:
                                             baseline=functools.partial(self._baseline, (number, scenario, need_index, seed,
                                                                                          dumps(need_fields), wl_sig, dumps(pins))))
         spec.supplier_tool_limits, spec.org_pins = sup_limits, pins
+        if spec.run.supplier_acceptance and not self.settings.demo_role_login:  # only a supplier whose organization has a user can be asked; the others stay agent-only (audited)
+            with_users = select(Supplier.id).join(User, User.org_id == Supplier.org_id).where(User.role == RoleEnum.SUPPLIER)
+            spec.run = dataclasses.replace(spec.run, supplier_users=frozenset((await db.execute(with_users)).scalars()))
         release: list[Any] = []
         if mode == "live":
             await self._live_llm(db, cfg, spec, release)
@@ -523,6 +529,16 @@ class ProjectService:
         await s.flush()
         return sup
 
+    async def _ensure_demo_supplier_user(self, s: AsyncSession, sid: str) -> None:
+        """Test bed only (DEMO_ROLE_LOGIN): the supplier that has to confirm its terms gets a role-picker account the moment it is asked, so the
+        deal never waits for a user that does not exist. The account has a random password nobody knows; it can only be entered by the picker."""
+        sup = await self._ensure_supplier(s, sid)
+        has_user = (await s.execute(select(User.id).where(User.org_id == sup.org_id, User.role == RoleEnum.SUPPLIER))).first()
+        if has_user is None:
+            s.add(User(id=uuid.uuid4(), email=f"supplier-{sid.lower()}@sourceloop.test", password_hash=security.Passwords(self.settings).hash(secrets.token_urlsafe(24)),
+                       role=RoleEnum.SUPPLIER, org_id=sup.org_id, created_at=self.clock.now()))
+            await s.flush()
+
     async def sync(self, h: RunHandle) -> None:
         """Write derived rows (messages, offers, approvals, subagent calls, supplier mandates, contract, hold, project).
 
@@ -598,6 +614,8 @@ class ProjectService:
                                    version=a.version, created_at=now)
                     s.add(row)
                     added_approvals[a.id] = row.id
+                    if a.kind.value == "SUPPLIER_ACCEPT" and self.settings.demo_role_login and isinstance(a.evidence.get("supplier"), str):
+                        await self._ensure_demo_supplier_user(s, a.evidence["supplier"])
                     if a.status is not AS.PENDING:
                         newly_resolved.add(a.id)
             await s.flush()

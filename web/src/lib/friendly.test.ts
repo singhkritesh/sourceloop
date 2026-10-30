@@ -3,7 +3,7 @@ import { actionText, APPROVAL_INFO, approvalTitle, nextStep, plainStatus, reason
 
 describe('friendly text', () => {
   it('has a title and explanation for every approval kind the backend can raise', () => {
-    const kinds = ['REQUIREMENT', 'COMPLIANCE_FLAG', 'TECHNICAL_QUAL', 'AWARD', 'CLAUSE', 'SIGNATURE', 'BANK_DETAILS', 'HOLD_RELEASE', 'MANDATE_BREACH', 'LOW_CONFIDENCE', 'LLM_UNAVAILABLE', 'STALLED', 'BUDGET', 'RULE'];
+    const kinds = ['REQUIREMENT', 'COMPLIANCE_FLAG', 'TECHNICAL_QUAL', 'AWARD', 'CLAUSE', 'SIGNATURE', 'SUPPLIER_ACCEPT', 'BANK_DETAILS', 'HOLD_RELEASE', 'MANDATE_BREACH', 'LOW_CONFIDENCE', 'LLM_UNAVAILABLE', 'STALLED', 'BUDGET', 'RULE'];
     for (const k of kinds) {
       const i = APPROVAL_INFO[k];
       expect(i, k).toBeTruthy();

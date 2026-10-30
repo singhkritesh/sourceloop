@@ -142,6 +142,9 @@ class CheckpointCfg(_Section):
     # are code-owned and always the buyer user: compliance flags (only when a supplier is flagged), the award, a changed locked
     # clause (only when one is touched) and the final bank-details + payment release. Technical pass/fail and signature are rule-settled.
     requirement_confirmation: bool = Field(False, json_schema_extra=W("switch"))
+    # The awarded supplier's own user confirms the final terms before signature (the supplier-side counterpart of the award).
+    supplier_acceptance: bool = Field(False, json_schema_extra=W(
+        "switch", help="The awarded supplier's user confirms the final terms before the contract is signed. Off: the supplier agent's own agreement stands."))
     batched_async: bool = Field(False, json_schema_extra=W(
         "switch", help="Requirement confirmation no longer blocks discovery; it must be resolved before the first mandatory checkpoint. "
                        "Mandatory checkpoints are never batched."))
@@ -274,7 +277,7 @@ class StudioConfig(_Section):
                          min_countries=w.min_countries, disabled_stages=frozenset(w.disabled_stages),
                          standard_clauses=tuple(w.standard_clauses), news_escalate_severity=w.news_escalate_severity,
                          news_min_confidence=w.news_min_confidence, config_version=config_version,
-                         confirm_requirement=w.checkpoints.requirement_confirmation,
+                         confirm_requirement=w.checkpoints.requirement_confirmation, supplier_acceptance=w.checkpoints.supplier_acceptance,
                          need_autonomy=int(w.autonomy.get(StageEnum.NEED, 1)), batched_async=w.checkpoints.batched_async,
                          judge_llm=w.negotiation.judge_llm, llm_moves=w.negotiation.llm_moves)
 

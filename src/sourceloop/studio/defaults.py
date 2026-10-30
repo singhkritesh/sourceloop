@@ -11,6 +11,7 @@ from sourceloop.llm.prompts_default import DEFAULT_BODIES
 from sourceloop.studio.schema import (
     AGENT_KEYS,
     AgentDef,
+    CheckpointCfg,
     ClauseDef,
     LlmSection,
     ModelDef,
@@ -18,6 +19,7 @@ from sourceloop.studio.schema import (
     ProviderDef,
     ScenarioDef,
     StudioConfig,
+    WorkflowCfg,
 )
 
 OLLAMA_URL = "http://localhost:11434"
@@ -42,6 +44,7 @@ def default_config() -> StudioConfig:
     return StudioConfig(
         providers={"ollama": ProviderDef(kind=ProviderKindEnum.OLLAMA, base_url=os.environ.get("OLLAMA_BASE_URL") or OLLAMA_URL, is_local=True)},
         llm=LlmSection(mode="replay", roles=models),
+        workflow=WorkflowCfg(checkpoints=CheckpointCfg(supplier_acceptance=os.environ.get("LLM_MODE") == "live")),
         agents={k: AgentDef(timeout_s=_TOOL_TIMEOUTS.get(k, 20)) for k in AGENT_KEYS},
         prompts={k: PromptDef(body=b) for k, b in DEFAULT_BODIES.items()},
         clauses={k: ClauseDef(**v) for k, v in DEFAULT_CLAUSES.items()},

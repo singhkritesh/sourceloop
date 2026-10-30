@@ -49,6 +49,13 @@ export const APPROVAL_INFO: Record<string, ApprovalInfo> = {
     approve: 'The contract is signed and the deal is recorded.',
     reject: 'The contract is not signed and the run stops.',
   },
+  SUPPLIER_ACCEPT: {
+    title: 'Confirm the final terms',
+    ask: 'You have been awarded this deal. Check the agreed price and lead time, then confirm you will honour them.',
+    why: 'Your agent negotiated within your limits, but taking on the order is your organization’s commitment.',
+    approve: 'You confirm the terms and the contract goes forward for signature.',
+    reject: 'You decline the order and the sourcing run ends without a deal. A reason is required.',
+  },
   BANK_DETAILS: {
     title: 'Verify supplier bank details',
     ask: 'Confirm the supplier’s bank details are genuine before any payment setup.',

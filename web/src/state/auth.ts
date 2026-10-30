@@ -56,8 +56,8 @@ export const can = {
   inspect: isInspector,
   verifyAudit: (r?: Role) => r === 'EVALUATOR' || r === 'ADMIN' || r === 'SUPER_ADMIN',
   seeProjects: (r?: Role) => !!r && r !== 'DESIGNER',
-  seeApprovals: (r?: Role) => !!r && [...BUYER_SIDE, 'EVALUATOR', 'ADMIN', 'SUPER_ADMIN'].includes(r),
-  resolveApprovals: (r?: Role) => r === 'BUYER',   // admins set rules and mediate; they never approve
+  seeApprovals: (r?: Role) => !!r && [...BUYER_SIDE, 'SUPPLIER', 'EVALUATOR', 'ADMIN', 'SUPER_ADMIN'].includes(r),
+  resolveApprovals: (r?: Role) => r === 'BUYER' || r === 'SUPPLIER',   // the buyer user, and the awarded supplier's user on its own terms; admins never approve
   seeStudio: (r?: Role) => r === 'DESIGNER' || r === 'SUPER_ADMIN' || r === 'EVALUATOR',
   editDraft: (r?: Role) => r === 'DESIGNER' || r === 'SUPER_ADMIN',
   adminStudio: (r?: Role) => r === 'SUPER_ADMIN',

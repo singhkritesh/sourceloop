@@ -13,11 +13,11 @@ from sourceloop.api.errors import ApiError
 from sourceloop.data.db import get_session
 from sourceloop.data.enums import ApprovalStatusEnum as AS
 from sourceloop.data.enums import RoleEnum as R
-from sourceloop.data.models import Approval, Project
+from sourceloop.data.models import Approval, Project, ProjectSupplier, Supplier
 from sourceloop.orchestrator.approvals import sla_fields
 
 router = APIRouter(prefix="/approvals", tags=["approvals"])
-APPROVAL_ROLES = (*BUYER_SIDE, R.EVALUATOR, R.SUPER_ADMIN, R.ADMIN)
+APPROVAL_ROLES = (*BUYER_SIDE, R.SUPPLIER, R.EVALUATOR, R.SUPER_ADMIN, R.ADMIN)
 
 
 class ResolveBody(BaseModel):
@@ -93,7 +93,23 @@ def approval_out(a: Approval, now: Any = None) -> dict[str, Any]:
             "created_at": a.created_at.isoformat(), "resolved_at": a.resolved_at.isoformat() if a.resolved_at else None}
 
 
+def _supplier_scope(p: Principal):
+    """A supplier user sees only the checkpoints addressed to the SUPPLIER role on projects where its own organization is a participant."""
+    mine = (select(ProjectSupplier.project_id).join(Supplier, Supplier.id == ProjectSupplier.supplier_id).where(Supplier.org_id == p.org_id))
+    return select(Approval).where(Approval.target_role == R.SUPPLIER, Approval.project_id.in_(mine))
+
+
+async def _is_mine(db: AsyncSession, p: Principal, a: Approval) -> bool:
+    """The checkpoint names one supplier in its own evidence; it belongs only to that supplier's organization."""
+    sid = (a.evidence or {}).get("supplier")
+    if not isinstance(sid, str):
+        return False
+    return (await db.execute(select(Supplier.id).where(Supplier.id == sid, Supplier.org_id == p.org_id))).first() is not None
+
+
 def _scope(p: Principal):
+    if p.role is R.SUPPLIER:
+        return _supplier_scope(p)
     stmt = select(Approval).join(Project, Project.id == Approval.project_id)
     if p.role in BUYER_SIDE:
         return stmt.where(Project.buyer_org_id == p.org_id, Approval.target_role == p.role)  # role-scoped inbox
@@ -111,7 +127,9 @@ async def list_approvals(request: Request, p: Principal = Depends(require_role(*
         stmt = stmt.where(Approval.status == AS(status))
     if project_id:
         stmt = stmt.where(Approval.project_id == project_id)
-    rows = (await db.execute(stmt.order_by(Approval.created_at.desc(), Approval.core_id).limit(limit))).scalars()
+    rows = list((await db.execute(stmt.order_by(Approval.created_at.desc(), Approval.core_id).limit(limit))).scalars())
+    if p.role is R.SUPPLIER:
+        rows = [a for a in rows if await _is_mine(db, p, a)]
     now = request.app.state.clock.now()
     return {"items": [approval_out(a, now) for a in rows]}
 
@@ -119,12 +137,17 @@ async def list_approvals(request: Request, p: Principal = Depends(require_role(*
 @router.post("/{aid}/resolve")
 @limiter.shared_limit(resolve_limit, scope="approval_resolve")  # fixed scope: one bucket per user, not per URL
 async def resolve(aid: uuid.UUID, body: ResolveBody, request: Request,
-                  p: Principal = Depends(require_role(*BUYER_SIDE, R.ADMIN, R.SUPER_ADMIN)), db: AsyncSession = Depends(get_session)) -> dict:
+                  p: Principal = Depends(require_role(*BUYER_SIDE, R.SUPPLIER, R.ADMIN, R.SUPER_ADMIN)), db: AsyncSession = Depends(get_session)) -> dict:
     # scope in SQL: another org's approval is a 404 (never 403); same org but other role's item is 403 afterwards
-    stmt = select(Approval).join(Project, Project.id == Approval.project_id).where(Approval.id == aid)
-    if p.role in BUYER_SIDE or p.role is R.ADMIN:
-        stmt = stmt.where(Project.buyer_org_id == p.org_id)
-    row = (await db.execute(stmt)).scalar_one_or_none()
+    if p.role is R.SUPPLIER:
+        row = (await db.execute(_supplier_scope(p).where(Approval.id == aid))).scalar_one_or_none()
+        if row is not None and not await _is_mine(db, p, row):
+            row = None
+    else:
+        stmt = select(Approval).join(Project, Project.id == Approval.project_id).where(Approval.id == aid)
+        if p.role in BUYER_SIDE or p.role is R.ADMIN:
+            stmt = stmt.where(Project.buyer_org_id == p.org_id)
+        row = (await db.execute(stmt)).scalar_one_or_none()
     if row is None:
         raise ApiError(404, "NOT_FOUND", "approval not found")
     if body.status != "EDITED" and body.edit:

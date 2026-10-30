@@ -72,6 +72,8 @@ class RunConfig:
     news_min_confidence: float = 0.6
     config_version: int = 1
     confirm_requirement: bool = False  # Studio workflow.checkpoints.requirement_confirmation (the only skippable checkpoint)
+    supplier_acceptance: bool = False  # Studio workflow.checkpoints.supplier_acceptance: the awarded supplier's user confirms the final terms
+    supplier_users: frozenset[str] | None = None  # suppliers whose organization has a user account (None = not known); only those can be asked
     need_autonomy: int = 1  # Studio workflow.autonomy[NEED]; >= 3 ("act then report") auto-confirms the requirement (audited)
     llm_moves: bool = True  # Studio workflow.negotiation.llm_moves: in a LIVE run the agents' moves are chosen by the model from the code's menu
     judge_llm: bool = False  # Studio workflow.negotiation.judge_llm: ask the reviewer model too (it can only add a concern)
@@ -596,6 +598,14 @@ class RunExecutor:
                        "price": st.deals[sid]["price"], "lead": st.deals[sid]["lead"]}
         cid = sha256_hex(dumps(st.contract))[:32]
         cid = f"{cid[:8]}-{cid[8:12]}-{cid[12:16]}-{cid[16:20]}-{cid[20:32]}"
+        if rt.cfg.supplier_acceptance and rt.cfg.supplier_users is not None and sid not in rt.cfg.supplier_users:
+            await self._auto(AK.SUPPLIER_ACCEPT, f"accept:{sid}", "supplier_has_no_user_account", [{"supplier": sid}])  # nobody to ask: audited, the agent's agreement stands
+        elif rt.cfg.supplier_acceptance:  # the supplier user's own commitment; the evidence is that supplier's own agreed terms, nothing of the buyer's
+            acc = await self._gate(AK.SUPPLIER_ACCEPT, f"accept:{sid}", ("CONFIRM_FINAL_TERMS",),
+                                   {"supplier": sid, "price": str(st.deals[sid]["price"]), "lead_time_weeks": st.deals[sid]["lead"],
+                                    "deviations": deviations}, {})
+            if acc.status is AS.REJECTED:
+                raise Stopped(OutcomeEnum.NO_DEAL, "supplier_declined_final_terms")
         r = await self._once("sign_request", lambda: rt.buyer.request_signature(sid, cid))
         # the buyer already approved the award and any locked-clause change, so signing the agreed contract needs no new decision
         await self._auto(AK.SIGNATURE, "sign", "signature_follows_approved_award", [{"contract": cid, "deviations": deviations}])

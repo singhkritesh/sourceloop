@@ -7,8 +7,7 @@ import httpx
 
 API = "http://127.0.0.1:8005/api/v1"
 creds = json.load(open("data/e2e/creds.json"))
-ROLE = {"REQUIREMENT": "buyer", "AWARD": "buyer", "COMPLIANCE_FLAG": "compliance", "TECHNICAL_QUAL": "quality",
-        "SIGNATURE": "legal", "CLAUSE": "legal", "BANK_DETAILS": "finance", "HOLD_RELEASE": "finance", "MANDATE_BREACH": "buyer"}
+ROLE: dict[str, str] = {}  # every remaining checkpoint is the buyer user's (docs/05-roles-and-perspectives.md)
 
 
 def client(who):
@@ -19,7 +18,7 @@ def client(who):
     return c
 
 
-cl = {w: client(w) for w in ("buyer", "compliance", "quality", "legal", "finance", "admin")}
+cl = {w: client(w) for w in ("buyer", "admin")}
 pid = cl["buyer"].post("/projects", json={"title": "determinism", "need_text": "", "scenario": "happy", "need_index": 0, "seed": 42}).json()["id"]
 cl["buyer"].post(f"/projects/{pid}/start").raise_for_status()
 deadline = time.time() + 120
@@ -29,11 +28,11 @@ while time.time() < deadline:
         if who == "admin":
             continue
         for a in c.get("/approvals", params={"status": "PENDING"}).json()["items"]:
-            if a["project_id"] == pid and ROLE.get(a["kind"]) == who:
+            if a["project_id"] == pid and who == "buyer":
                 c.post(f"/approvals/{a['id']}/resolve", json={"status": "APPROVED", "comment": "", "version": a["version"]}).raise_for_status()
     if p["status"] in ("DONE", "STOPPED", "FAILED") :
         time.sleep(1.5)
-        left = [a for a in cl["finance"].get("/approvals", params={"status": "PENDING"}).json()["items"] if a["project_id"] == pid]
+        left = [a for a in cl["buyer"].get("/approvals", params={"status": "PENDING"}).json()["items"] if a["project_id"] == pid]
         if not left:
             break
     time.sleep(0.4)

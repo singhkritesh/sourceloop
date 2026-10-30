@@ -15,8 +15,7 @@ npm run lint           # eslint (bans dangerouslySetInnerHTML and EventSource)
 npm test               # vitest (39 tests): SSE parser/reconnect (+no reconnect on 401/403), single-flight refresh, schema->form, ladder/feed/reducer, error mapping, approval edit shapes
 SMOKE_USERS='{"buyer":["<email>","<pw>"],"admin":[...]}' node scripts/smoke.mjs   # studio: SMOKE_ADMIN='["<email>","<pw>"]' node scripts/smoke-studio.mjs
 #   # headless Chrome (puppeteer-core) vs the live stack
-# full real-stack journey (fresh DB: scripts/e2e-fresh.sh; dev server on 3010; creds file from the seed output, gitignored):
-#   cd web && E2E_CREDS=../data/e2e/creds.json node scripts/e2e.mjs B C D E F   (phases: B approvals+scenarios, C Studio, D live LLM, E security, F restart; evidence in data/e2e/)
+# full browser journey against the running Docker stack: scripts/e2e-all.sh (runs web/scripts/e2e-simple.mjs; evidence in data/ui/)
 #   .venv/bin/python scripts/e2e-determinism.py   # API-level determinism probe (decision sequence identical; head hashes differ by design: random ids + wall-clock ts are hashed)
 ```
 

@@ -1,3 +1,4 @@
+// STALE: written for the old role set and six-checkpoint flow; not rerun since the buyer-only change. Current journey: e2e-simple.mjs
 // Real-stack e2e for the second-round features. Usage (from web/): E2E_CREDS=../data/e2e/creds.json RESULT_PREFIX=e2e-new node scripts/e2e-new.mjs N [H]
 //   N : supplier views (awardee vs loser), overdue badge, stop cancels pending approvals, structured need, AI badge, override-rates table
 //   H : HOLD_RELEASE after DONE is resolvable (also after an API restart) - see phase F in e2e.mjs for the restart variant

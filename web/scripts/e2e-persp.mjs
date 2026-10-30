@@ -1,3 +1,4 @@
+// STALE: written for the old role set and six-checkpoint flow; not rerun since the buyer-only change. Current journey: e2e-simple.mjs
 // Real-stack e2e: every login sees the project from ITS side only (P), and organization administration (O).
 // Usage (from web/): E2E_CREDS=../data/e2e/creds.json RESULT_PREFIX=e2e-persp node scripts/e2e-persp.mjs P O
 import fs from 'node:fs';

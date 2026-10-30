@@ -328,8 +328,8 @@ Base `/api/v1`. All JSON unless noted. Error envelope:
 | GET | `/projects/{id}/audit/export` | EVALUATOR, SUPER_ADMIN, ADMIN (buyer org) | NDJSON stream  **Planned (not built).** |
 | GET | `/projects/{id}/audit/verify` | EVALUATOR, SUPER_ADMIN, ADMIN (buyer org) | `{valid, first_bad_seq}` |
 | GET | `/suppliers/search` | BUYER | Registry search (public fields only) |
-| GET | `/ledger-holds` | FINANCE | List holds  **Planned (not built).** |
-| POST | `/ledger-holds/{id}/release` | FINANCE | Release; version-locked  **Planned (not built).** |
+| GET | `/ledger-holds` | BUYER | List holds  **Planned (not built).** |
+| POST | `/ledger-holds/{id}/release` | BUYER | Release; version-locked  **Planned (not built).** |
 | GET | `/metrics/runs/{id}` | EVALUATOR | Stage weeks vs baseline, touches, tokens  **Planned (not built).** |
 | POST | `/admin/seed` | SUPER_ADMIN | Reseed synthetic data (seed param)  **Planned (not built).** |
 | POST | `/admin/adversarial/run` | SUPER_ADMIN | Runs 18-case suite; returns run id  **Planned (not built).** |

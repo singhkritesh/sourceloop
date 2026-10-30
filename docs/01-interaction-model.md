@@ -55,7 +55,7 @@ Stage **order and message types are fixed**. Which stages are enabled (onboardin
 | 3 Qualification | Compliance screen (rules), news risk, requests docs | Compliance Docs subagent supplies verified docs | `DocRequest`, `DocSubmission`, `QualResult` | Each supplier QUALIFIED / REJECTED / REVIEW / BLOCKED | Compliance reviews flags; Quality owns technical pass/fail | Watchlist hit = block + escalate; agent cannot approve a part |
 | 4 Sourcing | Procurement issues RFQ; weather + landed cost compare; counters in mandate | Buyer verification → capacity/margin → quote generation; counters in mandate | `RFQ`, `Offer`, `Counter`, `Accept`, `Reject` | Award recommendation or `NO_DEAL` | Buyer approves award (L2) | Out-of-mandate message not delivered; round cap; min step; price-band check |
 | 5 Contracting | Contract assembly from approved clauses | Accept / redline negotiable clauses | `ContractDraft`, `Redline`, `SignRequest` (the bus also admits `Accept`, `Reject`, `Escalate` in this stage per `STAGE_TYPES`; the table lists the messages the default flow actually uses) | Signature (simulated) | Legal on every non-standard term; liability/termination/IP always | Only library clauses; locked clauses cannot be edited |
-| 6 Onboarding | Collects master data | Supplies data | `OnboardData` | Vendor record + ledger hold | Finance confirms bank details and releases hold | Agents cannot release hold |
+| 6 Onboarding | Collects master data | Supplies data | `OnboardData` | Vendor record + ledger hold | The buyer user confirms bank details and releases the hold in one decision | Agents cannot release hold |
 
 Monitoring after go-live is out of scope for v1.
 
@@ -102,7 +102,7 @@ Escalation = project pauses at that stage; an approval item with reasons and evi
 | Agents/subagents on/off, stages, timeouts, tool-call limits, custom extraction subagents | Compliance screen always on; custom subagents give evidence, never pass/fail |
 | Prompt instruction bodies | Untrusted-data wrapper, English preamble, output schema |
 | Stage enablement, autonomy (below ceiling), checkpoint role/mode | Stage order, message types, autonomy ceilings |
-| Escalation rules, mandate templates, scenarios, clause library, data sources, egress allowlist | Mandate secrecy, signing, audit chain, fail-closed, locked clauses, FINANCE-only hold release |
+| Escalation rules, mandate templates, scenarios, clause library, data sources, egress allowlist | Mandate secrecy, signing, audit chain, fail-closed, locked clauses, buyer-only hold release (admins never approve) |
 
 ## 10. Open questions
 

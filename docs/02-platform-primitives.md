@@ -96,7 +96,7 @@ Brief: *"Map the agent interaction model, identify platform primitives required,
 - **Gap:** Icertis integration, clause-fallback playbooks, jurisdictional variants.
 
 ### P15 Payment hold & finance hooks
-- Ledger hold created at onboarding; only FINANCE can release; bank detail confirmation is a human gate.
+- Ledger hold created at onboarding; only the buyer user can release, in one decision that also confirms the bank details; admins never approve.
 - **Gap:** real payment system hooks, segregation of duties, fraud checks for changed bank details.
 
 ### P16 Config lifecycle

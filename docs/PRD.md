@@ -320,7 +320,7 @@ Route enforcement: auth dependency on every `/api/v1` route except `/health` and
 
 **Agent loop.** Lead agent loop (buyer or supplier): max 12 tool calls per stage turn; duplicate call (same tool + identical args hash) is short-circuited and returns the cached result; loop that makes no state progress in 3 iterations is terminated and escalated. Tool calls run non-streaming.
 
-**Confirmation gates (human required):** requirement confirmation; compliance flags; technical pass/fail; award; any non-standard or locked clause; signature; bank detail confirmation and hold release.
+**Confirmation gates (human required, all the buyer user's):** a flagged supplier (only when flagged); the award; a changed locked clause (only when touched); one final decision that confirms bank details and releases the payment hold. Technical pass/fail and signature are settled by rules and audited as `checkpoint_skipped`; requirement confirmation is off by default. *(Revised from the original list; see CLAUDE.md.)*
 
 **Streaming.** Run viewer receives SSE `GET /api/v1/projects/{id}/stream` (see TRD). Events: `stage_changed`, `message`, `subagent_call`, `subagent_result`, `policy_block`, `escalation_created`, `approval_resolved`, `audit_event`, `run_finished`, `error`.
 

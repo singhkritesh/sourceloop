@@ -124,7 +124,7 @@ Only a predicate and a rule id ever leave the policy engine. Set by the orchestr
 | QUALIFICATION | certs, mandatory fields, flags, watchlists, news and weather | `QUAL_RESULT` per supplier; COMPLIANCE_FLAG and TECHNICAL_QUAL approvals |
 | SOURCING | index price, supplier and buyer mandates | `RFQ`, `OFFER`/`COUNTER` rounds (policy-checked), AWARD approval |
 | CONTRACTING | clause library, deviations | `CONTRACT_DRAFT`, `REDLINE`; CLAUSE and SIGNATURE approvals |
-| ONBOARDING | supplier onboarding fields (bank details are provided by the supplier, confirmed by Finance) | `ONBOARD_DATA`; BANK_DETAILS approval; ledger hold; HOLD_RELEASE |
+| ONBOARDING | supplier onboarding fields (bank details are provided by the supplier, confirmed by the buyer user in the final release decision) | `ONBOARD_DATA`; BANK_DETAILS approval; ledger hold; HOLD_RELEASE |
 
 ## 8. Gaps
 

@@ -30,6 +30,7 @@ from sourceloop.orchestrator.approvals import ApprovalService
 from sourceloop.orchestrator.runtime import ProjectRuntime, RunConfig, RunExecutor, SupplierRuntime
 from sourceloop.policy.mandates import BuyerMandate, SupplierMandate
 from sourceloop.subagents.buyer_tools import build_buyer_tools
+from sourceloop.subagents.deliberation import LLMDeliberator
 from sourceloop.subagents.supplier_tools import BuyerProfile, build_supplier_tools
 
 
@@ -183,8 +184,11 @@ def build_project(spec: ScenarioSpec, vis: Registry | None = None, full: Registr
                                           profile=SimulatedProfile(full) if spec.profile_source == "simulated" else None), max_concurrency=spec.news_concurrency)
     _apply_tool_cfg(btools, spec, spec.buyer_allowed_tools, "buyer")
     btools.on_denied = _denied_audit(audit, project_id, "buyer", spec.run.config_version)
+    # live run + llm_moves: the model chooses each agent's move from the code's menu; anywhere else the rule-based move is used (replay, tests)
+    live_model = llm_cfg.mode == "live" and not getattr(providers.get(llm_cfg.effective("negotiation_buyer", "fast").provider), "is_stub", False)
+    deliberator = LLMDeliberator(llm, project_id) if (spec.run.llm_moves and live_model) else None
     buyer = BuyerAgent(AgentChannel("buyer", bus), btools, buyer_mandate.max_unit_price, buyer_mandate.target_unit_price,
-                       buyer_mandate.max_rounds, buyer_mandate.min_step_pct, spec.buyer_policy or BuyerPolicy())
+                       buyer_mandate.max_rounds, buyer_mandate.min_step_pct, spec.buyer_policy or BuyerPolicy(), deliberator=deliberator)
 
     spec_need = K.NeedSpec(id=need.id, category=need.category, industry=need.industry, volume_units=need.volume_units,
                            required_certs=need.required_certs, excluded_countries=need.excluded_countries,
@@ -213,11 +217,12 @@ def build_project(spec: ScenarioSpec, vis: Registry | None = None, full: Registr
         tools.on_denied = _denied_audit(audit, project_id, f"supplier:{sid}", spec.run.config_version)
         agent = SupplierAgent(sid, AgentChannel(f"supplier:{sid}", bus), tools, mandate.min_unit_price, spec.max_rounds,
                               prof, buyer_org="buyer-org", index_price=idx,
-                              max_tool_calls=spec.supplier_tool_limits.get(sid, spec.supplier_max_tool_calls))
+                              max_tool_calls=spec.supplier_tool_limits.get(sid, spec.supplier_max_tool_calls),
+                              **({"deliberator": deliberator} if deliberator is not None else {}))
         return SupplierRuntime(sid, rec.name, rec.country, agent, mandate)
 
     return ProjectRuntime(project_id, spec_need, brief, buyer, buyer_mandate, bus, audit, ApprovalService(audit), llm,
-                          spec.run, make_supplier)
+                          spec.run, make_supplier, deliberator=deliberator)
 
 
 Decision = tuple[AS, dict[str, Any], str]

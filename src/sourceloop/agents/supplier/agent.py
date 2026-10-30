@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 
 from sourceloop.agents.common import contracts as K
+from sourceloop.agents.common.deliberate import Deliberator, Move, Pick, RuleDeliberator
 from sourceloop.agents.common.tools import ToolRunner, TurnGuard
 from sourceloop.bus.bus import AgentChannel, SendResult
 from sourceloop.bus.messages import Envelope
@@ -40,6 +41,8 @@ class SupplierAgent:
     _capacity: int = 0
     _lead: int = 0
     max_tool_calls: int = 12                 # Studio agents.supplier_lead.max_tool_calls (per handled message)
+    deliberator: Deliberator = field(default_factory=RuleDeliberator)
+    last_pick: Pick | None = None
 
     def _guard(self) -> TurnGuard:
         return TurnGuard(max_calls=self.max_tool_calls)
@@ -100,19 +103,54 @@ class SupplierAgent:
         conc = Decimal("0.5") if self.profile.stubborn else Decimal("1")
         return max(self.unit_floor, (opening - (opening - self.unit_floor) * frac * conc).quantize(Q4))
 
+    def _counter_moves(self, buyer_price: Decimal, rnd: int) -> list[Move]:
+        """The legal moves for this supplier, the rule-based one FIRST. Every counter price is at or above the supplier's own floor and below
+        its previous price; accepting is only offered at or above the floor."""
+        last = self._last_price if self._last_price is not None else self._ladder[0]
+        out: list[Move] = []
+        if buyer_price >= self._reservation(rnd):
+            out.append(Move("ACCEPT", "accept", buyer_price, f"Accept the buyer's counter of {buyer_price}."))
+        elif rnd >= self.max_rounds or last <= self.unit_floor:
+            out.append(Move("WALK", "walk", None, "End the negotiation without a deal."))
+        else:
+            target = max(self.unit_floor, ((last + buyer_price) / 2).quantize(Q4))
+            if target >= last:
+                target = self._reservation(rnd)
+            out.append(Move("COUNTER_STEADY", "counter", target, f"Counter at {target}, the planned step towards the buyer."))
+
+        def add(m: Move) -> None:
+            if all((m.kind, m.price) != (o.kind, o.price) for o in out):
+                out.append(m)
+        if buyer_price >= self.unit_floor:
+            add(Move("ACCEPT", "accept", buyer_price, f"Accept the buyer's counter of {buyer_price}."))
+        if rnd < self.max_rounds and last > self.unit_floor:
+            steady = out[0].price if out[0].kind == "counter" and out[0].price is not None else self._reservation(rnd)
+            firm = max(self.unit_floor, ((last + steady) / 2).quantize(Q4))
+            generous = max(self.unit_floor, ((steady + buyer_price) / 2).quantize(Q4))
+            for lab, pr, txt in (("COUNTER_FIRM", firm, "a firm counter that gives up little"), ("COUNTER_GENEROUS", generous, "a counter that moves further towards the buyer")):
+                if self.unit_floor <= pr < last:
+                    add(Move(lab, "counter", pr, f"Counter at {pr}: {txt}."))
+        if out[0].kind != "walk":
+            add(Move("WALK", "walk", None, "End the negotiation without a deal."))
+        return out
+
     async def on_counter(self, env: Envelope) -> SendResult:
         rnd = int(env.payload["round"])
         buyer_price = Decimal(str(env.payload["unit_price"]))
-        if buyer_price >= self._reservation(rnd):
-            return await self.channel.send(T.ACCEPT, "buyer", {"offer_id": str(env.id)}, in_reply_to=env.id)
         last = self._last_price if self._last_price is not None else self._ladder[0]
-        if rnd >= self.max_rounds or last <= self.unit_floor:
+        moves = self._counter_moves(buyer_price, rnd)
+        situation = (f"You are the supplier. Round {rnd} of {self.max_rounds}.",
+                     f"The buyer's counter is {buyer_price}; your own previous price was {last}; your floor is {self.unit_floor}.",
+                     f"The buyer's counter is {((buyer_price - self.unit_floor) / self.unit_floor * 100).quantize(Decimal('0.1'))}% above your floor.")
+        pick = await self.deliberator.pick(f"supplier:{self.supplier_id}", self.supplier_id, rnd, situation, moves)
+        self.last_pick = pick
+        m = moves[pick.index]
+        if m.kind == "accept":
+            return await self.channel.send(T.ACCEPT, "buyer", {"offer_id": str(env.id)}, in_reply_to=env.id)
+        if m.kind == "walk" or m.price is None:
             return await self.channel.send(T.REJECT, "buyer", {"reason_code": "NO_AGREEMENT"}, in_reply_to=env.id)
-        target = max(self.unit_floor, ((last + buyer_price) / 2).quantize(Q4))
-        if target >= last:  # cannot move without breaking the step rule: hold at reservation
-            target = self._reservation(rnd)
-        self._last_price = target
-        return await self.channel.send(T.COUNTER, "buyer", {"round": rnd + 1, "unit_price": str(target), "lead_time_weeks": self._lead,
+        self._last_price = m.price
+        return await self.channel.send(T.COUNTER, "buyer", {"round": rnd + 1, "unit_price": str(m.price), "lead_time_weeks": self._lead,
                                                             "capacity_units": self._capacity}, in_reply_to=env.id)
 
     # ---------- contracting ----------

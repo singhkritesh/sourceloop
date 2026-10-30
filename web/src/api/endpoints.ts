@@ -1,6 +1,6 @@
 import { http } from './http';
 import type {
-  ActivityItem, ActivitySummary, Approval, AuditEventRec, AuditVerify, Me, OrgInfo, OrgSummary, OrgUser, OverrideRate, OverridesView, OverrideSpec, Overview,
+  ActivityItem, ActivitySummary, AgentPerformance, Approval, AuditEventRec, AuditVerify, Me, OrgInfo, OrgSummary, OrgUser, OverrideRate, OverridesView, OverrideSpec, Overview,
   Project, ProjectMessage, Role, Scenario, SettingsView,
 } from './types';
 
@@ -44,6 +44,7 @@ export const projects = {
   verify: (id: string) => http.get<AuditVerify>(`/projects/${id}/audit/verify`),
   escalations: (id: string) => http.get<{ items: Approval[] }>(`/projects/${id}/escalations`),
   overview: (id: string) => http.get<Overview>(`/projects/${id}/overview`),
+  agentPerformance: (id: string) => http.get<AgentPerformance>(`/projects/${id}/agent-performance`),
   activity: (id: string) => http.get<{ items: ActivityItem[]; summary: ActivitySummary[] }>(`/projects/${id}/activity`),
   streamUrl: (id: string) => `/api/v1/projects/${id}/stream`,
 };

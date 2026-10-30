@@ -73,6 +73,7 @@ class RunConfig:
     config_version: int = 1
     confirm_requirement: bool = False  # Studio workflow.checkpoints.requirement_confirmation (the only skippable checkpoint)
     need_autonomy: int = 1  # Studio workflow.autonomy[NEED]; >= 3 ("act then report") auto-confirms the requirement (audited)
+    llm_moves: bool = True  # Studio workflow.negotiation.llm_moves: in a LIVE run the agents' moves are chosen by the model from the code's menu
     judge_llm: bool = False  # Studio workflow.negotiation.judge_llm: ask the reviewer model too (it can only add a concern)
     batched_async: bool = False  # Studio workflow.checkpoints.batched_async: requirement confirmation does not block discovery
 
@@ -105,6 +106,7 @@ class ProjectState:
     contract: dict[str, Any] | None = None
     hold: str | None = None
     ranking: list[dict[str, Any]] = field(default_factory=list)
+    award_advice: dict[str, Any] | None = None   # who the buyer agent recommended for the award, and whether a model or the rule chose
 
 
 @dataclass
@@ -123,6 +125,7 @@ class ProjectRuntime:
     suppliers: dict[str, SupplierRuntime] = field(default_factory=dict)
     state: ProjectState = field(default_factory=ProjectState)
     running: bool = False  # claim token: set by RunExecutor.run() for the duration of one run segment
+    deliberator: Any = None  # LLMDeliberator in a live run (agents choose their moves through it); None = rule-based moves
 
     def supplier(self, sid: str) -> SupplierRuntime:
         if sid not in self.suppliers:
@@ -135,12 +138,20 @@ class RunExecutor:
         self.rt = rt
         self.st = rt.state
         self.stages = enabled_stages(rt.cfg.disabled_stages)
+        if rt.deliberator is not None:
+            rt.deliberator.sink = self._audit_decision   # every model-made choice is audited BEFORE the agent acts on it
 
     # ------------------------------------------------------------------ driver
     async def _audit(self, action: str, **kw: Any) -> None:
         await self.rt.audit.append(self.rt.project_id, actor_type=kw.pop("actor_type", "orchestrator"),
                                    actor_id=kw.pop("actor_id", ORCHESTRATOR), action=action,
                                    config_version=self.rt.cfg.config_version, **kw)
+
+    async def _audit_decision(self, rec: dict[str, Any]) -> None:
+        """One audited agent decision: codes, probabilities and timing only (no prices or limits), so agent performance can be measured."""
+        agent = str(rec["agent"])
+        await self._audit("agent_decision", actor_type="agent", actor_id=agent, rule_id=str(rec["chosen"]),
+                          outcome="MODEL" if rec["source"] == "model" else "RULE", evidence=[rec])
 
     async def _set_status(self, to: PS) -> None:
         if self.st.status is not to:
@@ -425,9 +436,19 @@ class RunExecutor:
         ranked = sorted(final, key=lambda x: (x.landed_total, x.supplier_id))
         st.ranking = [{"supplier": x.supplier_id, "landed": str(x.landed_total), "price": str(x.offer.payload["unit_price"]),
                        "delay_p": x.delay_probability} for x in ranked]
-        best = ranked[0].supplier_id
-        a = await self._gate(AK.AWARD, "award", ("AWARD_RECOMMENDATION",), {"ranking": st.ranking},
-                             {"suggested": best, "why_others_lost": [r["supplier"] for r in st.ranking[1:]]})
+        rule_best = ranked[0].supplier_id
+        best, adv = rule_best, None
+        if len(ranked) > 1 and "award_advice" not in st.done:  # the model recommends among the finalists (the human still decides); once per run
+            finalists = [{"supplier_id": x.supplier_id, "name": rt.supplier(x.supplier_id).name, "landed": x.landed_total,
+                          "delay_p": x.delay_probability, "lead": x.offer.payload["lead_time_weeks"]} for x in ranked[:4]]
+            best, adv = await rt.buyer.recommend_award(finalists)
+            st.done.add("award_advice")
+            st.award_advice = {"supplier": best, "source": adv.source, "agrees_with_rule": best == rule_best}
+        elif (st.award_advice or {}).get("supplier") in st.deals:
+            best = st.award_advice["supplier"]
+        a = await self._gate(AK.AWARD, "award", ("AWARD_RECOMMENDATION",), {"ranking": st.ranking, "recommended_by": (st.award_advice or {}).get("source", "rule"),
+                                                                         "rule_choice": rule_best},
+                             {"suggested": best, "why_others_lost": [r["supplier"] for r in st.ranking if r["supplier"] != best]})
         if a.status is AS.REJECTED:
             raise Stopped(OutcomeEnum.STOPPED_BY_USER, "award_rejected")
         pick_s = a.edit.get("supplier") if a.status is AS.EDITED else None
@@ -495,7 +516,7 @@ class RunExecutor:
 
         for rnd in range(1, cap + 1):
             sup_price = Decimal(str(last.payload["unit_price"]))
-            action, price = rt.buyer.decide(sup_price, my_last, rnd)
+            action, price = await rt.buyer.deliberate(sid, sup_price, my_last, rnd, (f"The supplier's delivery-delay risk is {x.delay_probability:.0%}.",))
             if action == "accept":
                 if (await self._judged(sid, turn("buyer", "accept", rnd, sup_price, my_last, sup_price))).level is Level.INAPPROPRIATE:
                     await self._judge_stop(sid)

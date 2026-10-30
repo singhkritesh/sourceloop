@@ -125,6 +125,16 @@ export interface Candidate {
   supplier_id: string; name: string; country: string; qualification: string | null; reasons: string[]; rounds: number;
   latest_offer: OfferRow | null; awarded: boolean;
 }
+export interface AgentPerf {
+  agent: string; decisions: number; model_chosen: number; rule_used: number; fallbacks: Record<string, number>; agreement_with_rule_pct: number | null;
+  avg_confidence: number | null; avg_p_chosen: number | null; avg_ms: number | null; tokens: number; judge: Record<string, number>;
+}
+export interface AgentDecisionRow {
+  seq: number; agent: string; round: number | null; rule: string; chosen: string; source: 'model' | 'rule'; agrees_with_rule: boolean;
+  p_chosen: number | null; confidence: number | null; fallback: string | null; ms: number | null; model: string | null;
+}
+export interface AgentPerformance { live_model_decisions: boolean; agents: AgentPerf[]; decisions: AgentDecisionRow[] }
+
 export interface TurnReview { supplier_id: string | null; round: number | null; actor: 'buyer' | 'supplier' | 'you'; action: string; level: 'APPROPRIATE' | 'CONCERN' | 'INAPPROPRIATE'; notes: string[] }
 export interface Decision { kind: string; role: string; status: ApprovalStatus; stage: string; resolved_at: string | null; comment: string }
 export interface Milestone { stage: string; at: string }

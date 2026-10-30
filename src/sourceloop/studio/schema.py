@@ -153,6 +153,10 @@ class NegotiationCfg(_Section):
     concession: Decimal = Field(Decimal("0.45"), gt=0, le=1, json_schema_extra=W("number"))
     opening_discount: Decimal = Field(Decimal("0.90"), gt=0, le=1, json_schema_extra=W("number"))
     delay_penalty_pct: Decimal = Field(Decimal("20"), ge=0, le=100, json_schema_extra=W("number"))
+    llm_moves: bool = Field(True, exclude_if=lambda v: v is True, json_schema_extra=W(
+        "switch", help=("In a live run, each agent's next move (accept, counter, walk) is chosen by the 'fast' model from a menu the code builds. "
+                        "Every option is already inside the agent's own limits and the conduct judge still reviews each turn. If the model is "
+                        "unavailable or unsure, the rule-based move is used and the reason is recorded. Off: rule-based moves only.")))
     judge_llm: bool = Field(False, exclude_if=lambda v: not v, json_schema_extra=W(
         "switch", help=("Every negotiation turn is always judged by code (direction of movement, stalling, lowballing, crossing, giving up early, "
                         "overpaying). Turn this on to also ask the 'fast' model for a second opinion. The model can only add a concern; it can "
@@ -272,7 +276,7 @@ class StudioConfig(_Section):
                          news_min_confidence=w.news_min_confidence, config_version=config_version,
                          confirm_requirement=w.checkpoints.requirement_confirmation,
                          need_autonomy=int(w.autonomy.get(StageEnum.NEED, 1)), batched_async=w.checkpoints.batched_async,
-                         judge_llm=w.negotiation.judge_llm)
+                         judge_llm=w.negotiation.judge_llm, llm_moves=w.negotiation.llm_moves)
 
     def to_buyer_policy(self) -> BuyerPolicy:
         n, w = self.workflow.negotiation, self.workflow

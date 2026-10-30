@@ -27,10 +27,11 @@ async def test_happy_path_deal_with_all_controls():
     assert st.status is PS.DONE and st.outcome is OutcomeEnum.DEAL and st.awarded in st.deals
     assert st.contract and st.contract["signature_hash"] and st.hold == "HELD"
     kinds = {a.kind for a in rt.approvals.all("P1")}
-    assert {AK.REQUIREMENT, AK.TECHNICAL_QUAL, AK.AWARD, AK.SIGNATURE, AK.BANK_DETAILS, AK.HOLD_RELEASE} <= kinds
+    assert {AK.AWARD, AK.HOLD_RELEASE} <= kinds  # the buyer decides the award and, at the end, bank details + payment release
+    assert not kinds & {AK.REQUIREMENT, AK.TECHNICAL_QUAL, AK.SIGNATURE, AK.BANK_DETAILS}  # rule-settled and audited, not asked
     assert await rt.audit.verify("P1") == (True, None)
     touches = sum(1 for a in rt.approvals.all("P1") if a.status is not AS.PENDING)
-    assert touches <= 8  # human touches stay small: batched checkpoints, not per-supplier approvals
+    assert touches <= 4  # minimal human intervention: a flagged supplier, the award, and the final payment release
     # no sanctioned / forced-labor supplier ever reached RFQ
     assert not (set(st.shortlist) & KEY.sanctioned_ids)
     assert all(not FULL.get(s).forced_labor_flag for s in st.shortlist)
@@ -77,17 +78,17 @@ async def test_inflated_certificate_claims_never_reach_buyer():
     assert liar not in st.shortlist
 
 
-async def test_locked_clause_goes_to_legal_and_requires_explicit_override():
+async def test_locked_clause_goes_to_the_buyer_and_requires_explicit_override():
     _, base = await baseline()
     win = base.awarded
     spec = ScenarioSpec(profiles={win: SupplierProfile(redline_locked_clause="liability")})
     rt = build_project(spec, VIS, FULL)  # default persona: accept recommendation = keep standard clause
     st = await run_to_completion(rt)
     clause = [a for a in rt.approvals.all("P1") if a.kind is AK.CLAUSE]
-    assert clause and clause[0].target_role.value == "LEGAL" and st.contract["deviations"] == []
+    assert clause and clause[0].target_role.value == "BUYER" and st.contract["deviations"] == []
 
     rt2 = build_project(spec, VIS, FULL)
-    res = Resolver(decisions={AK.CLAUSE: (AS.EDITED, {"accept_change": True}, "Legal accepts capped liability variant")})
+    res = Resolver(decisions={AK.CLAUSE: (AS.EDITED, {"accept_change": True}, "Buyer accepts capped liability variant")})
     st2 = await run_to_completion(rt2, res)
     assert st2.contract["deviations"] == ["liability"]
     actions = [r.action for r in await rt2.audit.store.read("P1")]

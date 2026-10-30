@@ -24,27 +24,30 @@ Needs 8 GB memory (16 GB is comfortable) and about 10 GB of free disk. Stop the 
 
 ## 2. Sign in
 
-The login page is a role picker: click the role you want to try (start with **Buyer**). There is no password in the demo. Use **Sign out** (top right) to switch roles.
-Password sign-in is still there behind "Sign in with a password instead" (passwords are in `data/demo-creds.txt`), and `DEMO_ROLE_LOGIN=false` in `.env` turns the picker off. The picker is never active when `APP_ENV=prod`.
+The login page is a role picker: click **Buyer** to start (there is no password in the demo). Use the sign-out icon (top right) to switch role.
+Password sign-in is still behind "Sign in with a password instead", and `DEMO_ROLE_LOGIN=false` in `.env` turns the picker off. It is never active when `APP_ENV=prod`.
+
+| Role | What it is for |
+|---|---|
+| **Buyer** (two organisations) | Describes the need and makes every buyer-side decision |
+| **Supplier** (two organisations) | Sees the requests it was invited to; its own agent quotes and negotiates within its own limits |
+| **SBN admin** | Platform operator: sets platform rules in Studio and Settings, mediates, sees everything |
+| **Organization admin** | Manages one organisation's people and agent settings. Never approves anything |
 
 ## 3. Your first run
 
-1. On **Projects**, click **Run a sample project**.
-2. The bar at the top shows the six stages (Need, Discovery, Qualification, Sourcing, Contracting, Onboarding). The card under it says what is happening.
-3. When it says **Needs a decision**, click **Review and decide**, read the evidence and approve. A full run needs several people, as in real life: after you confirm the need, the project waits for **Compliance** , then **Quality** , you again for the award, **Legal**  for protected clauses and **Finance**  for payment. The project page always says who it is waiting for. Sign out and pick that role, approve, and the run moves on.
-4. When it says **Deal reached**, scroll down for suppliers, prices, the contract and the record of every step.
+1. On **Projects**, click **New sourcing project**, give it a name and describe what you need in your own words, for example
+   *"We need 500 PCB assemblies certified IATF16949 and RoHS, delivered within 8 weeks. Avoid suppliers in Turkey. Target price around 95 per unit."*
+2. A small local AI model reads your text and builds the request from it (product, quantity, certificates, countries to avoid, lead time, target price). If it cannot place the request it says so and asks you to rephrase.
+3. The agents then run on their own: they find and screen suppliers, request quotes and negotiate, and every negotiation turn is checked for fair conduct.
+4. You are asked only when a person is really needed: a **flagged supplier**, the **award** (who wins), a **changed protected contract clause** (only if one is touched) and, at the end, **bank details and payment release** in one decision. Click **Review and decide**, read the evidence and approve.
+5. When it says **Deal reached**, scroll down for the suppliers, prices, contract and the record of every step.
 
-The blue **Demo mode** note means the agents replay recorded answers, so a run is repeatable but does not react to your exact words. To use the local AI model
-instead, pick **Super admin**, open **Settings** and switch to live mode (or install with `./install-mac.sh --live`). Live runs are slower
-(about a minute or more) and the model is loaded only while a run is working.
+A run takes a minute or two on a laptop. The model is loaded only while it is working and is unloaded straight afterwards.
 
 ## 4. See the other side
 
-Pick **Supplier** to see the same project from the supplier's side. A supplier sees only its own conversation and never the buyer's limits.
-
-## 5. Words you will see
-
-The **Help** page in the app has a short glossary (agent, limits, qualification, RFQ, audit record, and more).
+Sign out and pick **Supplier** to see the same request from the supplier's side. A supplier sees only its own conversation and never the buyer's limits.
 
 ## Something wrong?
 
@@ -52,5 +55,6 @@ The **Help** page in the app has a short glossary (agent, limits, qualification,
 |---|---|
 | Page will not load | `./doctor.sh`, then `./start.sh` |
 | "Cannot reach the server" | Open Docker Desktop and wait until it says it is running |
-| Run seems stuck | It is likely waiting for you under **Approvals** |
+| Run seems stuck | It is likely waiting for you under **Approvals**, or the model is still working (give it a minute) |
+| "I could not tell what to buy" | Say the product (this demo's registry covers PCB assemblies, connectors, metal castings, precision machining), how many, and any certificates or countries to avoid |
 | Want a clean start | `./stop.sh && docker compose down -v && rm data/demo-creds.txt && ./start.sh` (deletes all projects) |

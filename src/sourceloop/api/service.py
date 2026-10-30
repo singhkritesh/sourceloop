@@ -12,6 +12,7 @@ import functools
 import hashlib
 import json
 import time
+import types
 import uuid
 from dataclasses import dataclass, field
 from decimal import Decimal
@@ -241,6 +242,21 @@ class ProjectService:
         if len(self.handles) >= self.settings.max_live_handles:
             raise ApiError(503, "CAPACITY_EXCEEDED", "the server is at its limit of live runs; retry later", {"Retry-After": "30"})
 
+    async def _read_need(self, db: AsyncSession, cfg: StudioConfig, number: int, scenario: str, pid: str, need_text: str) -> dict[str, Any]:
+        """Live mode: the fast model turns the typed need into structured fields. The model is unloaded as soon as it has answered."""
+        from sourceloop.llm.client import LLMClient
+        from sourceloop.subagents.need_intake import NeedUnclear, read_need
+
+        spec = cfg.to_scenario_spec(scenario, number)
+        release: list[Any] = []
+        await self._live_llm(db, cfg, spec, release)
+        try:
+            return await read_need(LLMClient(spec.llm_cfg, spec.llm_providers or {}), pid, need_text)  # type: ignore[arg-type]
+        except NeedUnclear as e:
+            raise ApiError(422, "NEED_UNCLEAR", e.message) from None
+        finally:
+            await self._release_models(types.SimpleNamespace(release=release))  # type: ignore[arg-type]
+
     async def _build_runtime(self, db: AsyncSession, cfg: StudioConfig, number: int, *, mode: str, scenario: str,
                              need_index: int | None, seed: int, need_fields: dict[str, Any], token_cap: int | None,
                              pid: uuid.UUID, buyer_org_id: uuid.UUID, org_pins: dict[str, Any] | None = None,
@@ -284,6 +300,9 @@ class ProjectService:
             raise ApiError(422, "UNKNOWN_SCENARIO", "scenario is not defined in the active configuration")
         pid = project_id or uuid.uuid4()
         fields = need_fields or {}
+        need_source = "structured" if fields else "sample"
+        if mode == "live" and not fields and need_text.strip():  # a real run: the model reads what the buyer typed
+            fields, need_source = await self._read_need(db, cfg, pin.number, scenario, str(pid), need_text), "typed_text_read_by_model"
         spec, rt, audit, release, cap = await self._build_runtime(
             db, cfg, pin.number, mode=mode, scenario=scenario, need_index=need_index, seed=seed, need_fields=fields,
             token_cap=int(eff["token_budget_per_project"]), pid=pid, buyer_org_id=p.org_id)
@@ -299,7 +318,7 @@ class ProjectService:
             await db.flush()
             proj = Project(id=pid, buyer_org_id=p.org_id, title=title, need_text=need_text,
                            brief={**rt.brief, "scenario": scenario, "seed": seed, "need_index": spec.need_index,
-                                  "config_version": pin.number, "token_cap": cap, "need_fields": json.loads(dumps(fields)),
+                                  "config_version": pin.number, "token_cap": cap, "need_fields": json.loads(dumps(fields)), "need_source": need_source,
                                   "watchlist_sig": self._wl_sig(spec.extra_watchlist), "org_overrides": spec.org_pins},
                            stage=S.NEED, status=PS.DRAFT, buyer_mandate_id=mandate.id, llm_mode=mode,
                            config_version_id=pin.row_id, created_by=p.id, created_at=now, updated_at=now)

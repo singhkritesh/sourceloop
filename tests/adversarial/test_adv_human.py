@@ -33,9 +33,9 @@ def svc() -> ApprovalService:
 
 # ---- role binding
 def test_adv18_required_roles_for_the_critical_checkpoints():
-    assert KIND_ROLE[AK.AWARD] is R.BUYER and KIND_ROLE[AK.SIGNATURE] is R.LEGAL and KIND_ROLE[AK.CLAUSE] is R.LEGAL
-    assert KIND_ROLE[AK.BANK_DETAILS] is R.FINANCE and KIND_ROLE[AK.HOLD_RELEASE] is R.FINANCE
-    assert KIND_ROLE[AK.COMPLIANCE_FLAG] is R.COMPLIANCE and KIND_ROLE[AK.TECHNICAL_QUAL] is R.QUALITY
+    # every checkpoint is the buyer user's; admins only set rules and mediate, so no kind may ever point at an admin
+    assert all(KIND_ROLE[k] is R.BUYER for k in (AK.AWARD, AK.CLAUSE, AK.COMPLIANCE_FLAG, AK.HOLD_RELEASE))
+    assert not any(role in (R.ADMIN, R.SUPER_ADMIN) for role in KIND_ROLE.values())
     assert set(KIND_ROLE) == set(AK)  # no kind without an owner
 
 
@@ -92,7 +92,7 @@ async def test_adv18_ensure_is_idempotent_and_never_reopens_or_auto_approves():
     s = svc()
     a = await s.ensure("p", AK.SIGNATURE, "sign", ("R",))
     assert a.status is AS.PENDING
-    await s.resolve(a.id, AS.REJECTED, "legal1", R.LEGAL, LONG)
+    await s.resolve(a.id, AS.REJECTED, "buyer1", R.BUYER, LONG)
     again = await s.ensure("p", AK.SIGNATURE, "sign", ("R",))
     assert again is a and again.status is AS.REJECTED  # asking again does not reset or flip it
     assert len([x for x in s.all("p")]) == 1
@@ -101,9 +101,9 @@ async def test_adv18_ensure_is_idempotent_and_never_reopens_or_auto_approves():
 async def test_adv18_human_decisions_are_audited_with_the_human_identity():
     s = svc()
     a = await s.ensure("p", AK.BANK_DETAILS, "bank", ("R",))
-    await s.resolve(a.id, AS.APPROVED, "fin-42", R.FINANCE)
+    await s.resolve(a.id, AS.APPROVED, "buyer-42", R.BUYER)
     rec = [r for r in await s.audit.store.read("p") if r.action == "approval_resolved"][0]
-    assert rec.actor_type == "human" and rec.approver_id == "fin-42" and rec.outcome == "APPROVED"
+    assert rec.actor_type == "human" and rec.approver_id == "buyer-42" and rec.outcome == "APPROVED"
 
 
 async def test_adv18_rubber_stamping_is_flagged():
@@ -117,7 +117,7 @@ async def test_adv18_rubber_stamping_is_flagged():
 
 # ---- the run can never move past an unresolved checkpoint
 async def test_adv18_run_stops_at_the_first_checkpoint_and_stays_stopped():
-    rt = build_project(ScenarioSpec(), VIS, FULL)
+    rt = build_project(ScenarioSpec(run=RunConfig(confirm_requirement=True)), VIS, FULL)
     ex = RunExecutor(rt)
     for _ in range(3):
         await ex.run()
@@ -127,6 +127,16 @@ async def test_adv18_run_stops_at_the_first_checkpoint_and_stays_stopped():
     assert {e.type for e in rt.bus.log} == {T.BRIEF}  # nothing downstream was sent
 
 
+async def test_adv18_the_first_checkpoint_by_default_is_a_flagged_supplier_and_nothing_is_sourced_before_it():
+    rt = build_project(ScenarioSpec(), VIS, FULL)
+    ex = RunExecutor(rt)
+    for _ in range(3):
+        await ex.run()
+        assert rt.state.status is PS.ESCALATED and rt.state.stage is S.QUALIFICATION
+    assert [a.kind for a in rt.approvals.pending("P1")] == [AK.COMPLIANCE_FLAG]
+    assert T.RFQ not in {e.type for e in rt.bus.log}  # no quote was requested while a person still had to look at a flag
+
+
 async def test_adv18_no_approval_is_ever_resolved_without_a_human_call():
     rt = build_project(ScenarioSpec(), VIS, FULL)
     await RunExecutor(rt).run()
@@ -134,30 +144,25 @@ async def test_adv18_no_approval_is_ever_resolved_without_a_human_call():
     assert not [r for r in await rt.audit.store.read("P1") if r.action == "approval_resolved"]
 
 
-GATES = [
-    (AK.REQUIREMENT, "invite"), (AK.TECHNICAL_QUAL, "rfq"), (AK.AWARD, "draft"), (AK.SIGNATURE, "sign"), (AK.BANK_DETAILS, "hold"),
-]
+GATES = [(AK.REQUIREMENT, "invite"), (AK.AWARD, "draft"), (AK.HOLD_RELEASE, "release")]
 
 
 @pytest.mark.parametrize("kind,downstream", GATES)
 async def test_adv18_a_rejected_checkpoint_never_proceeds(kind, downstream):
-    rt = build_project(ScenarioSpec(), VIS, FULL)
+    rt = build_project(ScenarioSpec(run=RunConfig(confirm_requirement=True)), VIS, FULL)
     res = Resolver(decisions={kind: (AS.REJECTED, {}, LONG)})
     st = await run_to_completion(rt, res)
+    if downstream == "release":  # the last checkpoint: rejecting it leaves the payment held and the project finished, never released
+        assert st.hold == "HELD" and not any(a.status is AS.APPROVED for a in rt.approvals.all("P1") if a.kind is AK.HOLD_RELEASE)
+        with pytest.raises(IllegalTransition):
+            await RunExecutor(rt).run()
+        return
     assert st.status in (PS.STOPPED,) and st.outcome in (OutcomeEnum.STOPPED_BY_USER, OutcomeEnum.NO_VIABLE_SUPPLIER)
     types = {e.type for e in rt.bus.log}
-    actions = [r.action for r in await rt.audit.store.read("P1")]
     if downstream == "invite":
         assert T.INVITE not in types
-    if downstream == "rfq":
-        assert T.RFQ not in types and st.awarded is None
     if downstream == "draft":
         assert T.CONTRACT_DRAFT not in types and st.contract is None
-    if downstream == "sign":
-        assert st.contract and "signature_hash" not in st.contract
-    if downstream == "hold":
-        assert st.hold is None and "ledger_hold_created" not in actions
-        assert not any(a.kind is AK.HOLD_RELEASE for a in rt.approvals.all("P1"))
     with pytest.raises(IllegalTransition):  # and it cannot be restarted behind the human's back
         await RunExecutor(rt).run()
 
@@ -173,11 +178,12 @@ async def test_adv18_hold_release_stays_pending_after_a_complete_run():
     st = await run_to_completion(rt)
     assert st.status is PS.DONE and st.hold == "HELD"
     hold = [a for a in rt.approvals.all("P1") if a.kind is AK.HOLD_RELEASE][0]
-    assert hold.status is AS.PENDING  # only a FINANCE human can ever release it
-    for role in (R.BUYER, R.ADMIN, R.LEGAL, R.EVALUATOR, R.SUPPLIER):
+    assert hold.status is AS.PENDING  # only the buyer user can ever release it; admins and the supplier side cannot
+    assert "CONFIRM_BANK_DETAILS" in hold.reasons  # bank details and payment release are one decision
+    for role in (R.ADMIN, R.SUPER_ADMIN, R.LEGAL, R.FINANCE, R.EVALUATOR, R.SUPPLIER):
         with pytest.raises(ApprovalError):
             await rt.approvals.resolve(hold.id, AS.APPROVED, "x", role)
-    assert (await rt.approvals.resolve(hold.id, AS.APPROVED, "fin", R.FINANCE)).status is AS.APPROVED
+    assert (await rt.approvals.resolve(hold.id, AS.APPROVED, "buyer", R.BUYER)).status is AS.APPROVED
 
 
 async def test_adv18_agents_have_no_channel_to_resolve_approvals_or_release_holds(bus):
@@ -191,15 +197,16 @@ async def test_adv18_edited_award_cannot_name_an_arbitrary_supplier():
     assert st.awarded in st.deals
 
 
-async def test_adv18_edited_technical_qualification_can_only_remove_suppliers():
-    base = await run_to_completion(build_project(ScenarioSpec(), VIS, FULL))
-    drop = base.included[0]
+async def test_adv18_technical_pass_and_signature_are_rule_settled_and_audited_not_silent():
     rt = build_project(ScenarioSpec(), VIS, FULL)
-    st = await run_to_completion(rt, Resolver(decisions={AK.TECHNICAL_QUAL: (AS.EDITED, {"fail": [drop], "include": ["S99999"]}, LONG)}))
-    assert drop not in st.included and "S99999" not in st.included
+    st = await run_to_completion(rt)
+    assert st.status is PS.DONE and st.included
+    assert not any(a.kind in (AK.TECHNICAL_QUAL, AK.SIGNATURE, AK.BANK_DETAILS) for a in rt.approvals.all("P1"))
+    skipped = [r.rule_id for r in await rt.audit.store.read("P1") if r.action == "checkpoint_skipped"]
+    assert "technical_checks_passed_by_rules" in skipped and "signature_follows_approved_award" in skipped
 
 
-async def test_adv18_clause_waiver_requires_legal_edited_with_explicit_flag():
+async def test_adv18_clause_waiver_requires_the_buyer_to_edit_with_explicit_flag():
     base = await run_to_completion(build_project(ScenarioSpec(), VIS, FULL))
     from sourceloop.agents.supplier.agent import SupplierProfile
     spec = lambda: ScenarioSpec(profiles={base.awarded: SupplierProfile(redline_locked_clause="ip")})  # noqa: E731

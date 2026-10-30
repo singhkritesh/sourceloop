@@ -41,62 +41,62 @@ def test_prod_requires_valid_fernet_and_signing_secret(monkeypatch):
 
 
 # ---- F2 / F3: approvals
-async def _to_tech(w, pid):  # noqa: F811
+async def _to_flag(w, pid):  # noqa: F811
+    """Drive the run to the buyer's compliance-flag checkpoint (the checkpoint whose edit carries a payload and that exists by default)."""
     for _ in range(10):
-        items = [a for a in await pending(w, pid) if a["kind"] == "TECHNICAL_QUAL"]
+        items = [a for a in await pending(w, pid) if a["kind"] == "COMPLIANCE_FLAG"]
         if items:
             return items[0]
         await resolve_all(w, pid)
         await w.service.join(pid)
-    raise AssertionError("no TECHNICAL_QUAL approval")
+    raise AssertionError("no COMPLIANCE_FLAG approval")
 
 
 async def test_malformed_edit_is_422_and_project_stays_resumable(w):  # noqa: F811
     pid = await create_and_start(w)
-    a = await _to_tech(w, pid)
-    q = await w.client("quality")
+    a = await _to_flag(w, pid)
+    b = await w.client("buyer")
     url = f"/approvals/{a['id']}/resolve"
-    base = {"status": "EDITED", "version": a["version"], "comment": "removing one supplier here"}
-    for bad in ({"fail": 5}, {"fail": [1]}, {"fail": ["NOT-A-SUPPLIER"]}, {"fail": [], "x": 1}, {"fail": ["x" * 500]}):
-        r = await q.post(url, {**base, "edit": bad})
+    base = {"status": "EDITED", "version": a["version"], "comment": "clearing one supplier here"}
+    for bad in ({"include": 5}, {"include": [1]}, {"include": ["NOT-A-SUPPLIER"]}, {"include": [], "x": 1}, {"include": ["x" * 500]}):
+        r = await b.post(url, {**base, "edit": bad})
         assert r.status_code == 422 and r.json()["error"]["code"] == "INVALID_EDIT", bad
-    r = await q.post(url, {"status": "APPROVED", "version": a["version"], "edit": {"fail": []}})
+    r = await b.post(url, {"status": "APPROVED", "version": a["version"], "edit": {"include": []}})
     assert r.status_code == 422  # edits only with EDITED
     # still pending, same version, and resolvable afterwards
     again = [x for x in await pending(w, pid) if x["id"] == a["id"]]
     assert again and again[0]["version"] == a["version"]
-    ok = await q.post(url, {"status": "APPROVED", "version": a["version"]})
+    ok = await b.post(url, {"status": "APPROVED", "version": a["version"]})
     assert ok.status_code == 200
 
 
 async def test_valid_edit_accepted_and_audit_binds_edit_hash(w):  # noqa: F811
     pid = await create_and_start(w)
-    a = await _to_tech(w, pid)
-    q = await w.client("quality")
-    cand = a["evidence"]["candidates"][0]
-    edit, comment = {"fail": [cand]}, "failing one candidate on tech"
-    r = await q.post(f"/approvals/{a['id']}/resolve", {"status": "EDITED", "version": a["version"], "comment": comment, "edit": edit})
+    a = await _to_flag(w, pid)
+    b = await w.client("buyer")
+    cand = next(iter(a["evidence"]["flagged"]))
+    edit, comment = {"include": [cand]}, "clearing one flagged supplier after review"
+    r = await b.post(f"/approvals/{a['id']}/resolve", {"status": "EDITED", "version": a["version"], "comment": comment, "edit": edit})
     assert r.status_code == 200, r.text
     ev = (await (await w.client("evaluator")).get(f"/projects/{pid}/audit")).json()
     items = ev["items"] if isinstance(ev, dict) else ev
-    rec = [e for e in items if e["action"] == "approval_resolved" and e["rule_id"] == "TECHNICAL_QUAL"][-1]
+    rec = [e for e in items if e["action"] == "approval_resolved" and e["rule_id"] == "COMPLIANCE_FLAG"][-1]
     evi = rec["evidence"][0]
     assert evi["decision_hash"] == sha256_hex(dumps({"edit": edit, "comment": comment}))
-    assert evi["edit_keys"] == ["fail"] and evi["decision"] == "EDITED"
+    assert evi["edit_keys"] == ["include"] and evi["decision"] == "EDITED"
 
 
 # ---- F8: escalations scoped by role
 async def test_escalations_are_role_scoped(w):  # noqa: F811
     pid = await create_and_start(w)
-    await _to_tech(w, pid)
-    q = await w.client("quality")
+    await _to_flag(w, pid)
     b = await w.client("buyer")
-    qk = {x["kind"] for x in (await q.get(f"/projects/{pid}/escalations")).json()["items"]}
     bk = {x["kind"] for x in (await b.get(f"/projects/{pid}/escalations")).json()["items"]}
-    assert "TECHNICAL_QUAL" in qk and "TECHNICAL_QUAL" not in bk
-    assert all(ROLE_OF_KIND[k] == "quality" for k in qk)
+    assert "COMPLIANCE_FLAG" in bk and all(ROLE_OF_KIND[k] == "buyer" for k in bk)
+    qk = {x["kind"] for x in (await (await w.client("quality")).get(f"/projects/{pid}/escalations")).json()["items"]}
+    assert "COMPLIANCE_FLAG" not in qk       # a role that no longer owns any checkpoint sees none
     ek = {x["kind"] for x in (await (await w.client("evaluator")).get(f"/projects/{pid}/escalations")).json()["items"]}
-    assert "TECHNICAL_QUAL" in ek
+    assert "COMPLIANCE_FLAG" in ek
 
 
 # ---- F9 / F19: bus

@@ -100,8 +100,10 @@ async def test_role_picker_signs_in_a_demo_account_without_a_password(w):  # noq
     from api_support import Api
     c = Api(w.app)
     roles = (await c.get("/auth/demo-roles")).json()
-    assert roles["enabled"] and {a["role"] for a in roles["accounts"]} >= {"BUYER", "COMPLIANCE", "SUPPLIER", "SUPER_ADMIN"}
+    assert roles["enabled"] and {a["role"] for a in roles["accounts"]} >= {"BUYER", "SUPPLIER", "ADMIN", "SUPER_ADMIN"}
     assert all(a["email"].endswith("@sourceloop.test") for a in roles["accounts"])
+    assert {a["role"] for a in roles["accounts"]} <= {"BUYER", "SUPPLIER", "ADMIN", "SUPER_ADMIN"}   # legacy approver users are not offered
+    assert (await c.post("/auth/demo-login", {"email": w.emails["finance"]})).status_code == 404
     assert "password" not in json.dumps(roles).lower()
     r = await c.post("/auth/demo-login", {"email": w.emails["buyer"]})
     assert r.status_code == 200 and r.json()["role"] == "BUYER"

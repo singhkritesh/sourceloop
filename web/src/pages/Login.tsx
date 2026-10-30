@@ -8,11 +8,11 @@ import { Icon } from '../components/Icon';
 import { useAuth } from '../state/auth';
 
 const ROLE_HINT: Record<string, string> = {
-  BUYER: 'Start a project and make the big calls', COMPLIANCE: 'Review sanctions and certificate flags', QUALITY: 'Pass or fail suppliers technically',
-  LEGAL: 'Approve protected contract clauses', FINANCE: 'Release payment holds', SUPPLIER: 'See a project from the supplier side',
-  EVALUATOR: 'Read-only view of everything', DESIGNER: 'Edit the configuration in Studio', SUPER_ADMIN: 'Everything, including settings', ADMIN: 'Manage one organization',
+  BUYER: 'Describes the need and makes every buyer-side decision', SUPPLIER: 'Receives requests and quotes through its own agent',
+  SUPER_ADMIN: 'Platform operator: sets platform rules and mediates, sees everything', ADMIN: 'Manages this organization and its agent settings; never approves',
 };
-const ORDER = ['BUYER', 'COMPLIANCE', 'QUALITY', 'LEGAL', 'FINANCE', 'SUPPLIER', 'EVALUATOR', 'DESIGNER', 'ADMIN', 'SUPER_ADMIN'];
+const ORDER = ['BUYER', 'SUPPLIER', 'SUPER_ADMIN', 'ADMIN'];
+const ROLE_NAME: Record<string, string> = { SUPER_ADMIN: 'SBN admin', ADMIN: 'Organization admin' };
 
 export function Login() {
   const setMe = useAuth((s) => s.setMe);
@@ -79,7 +79,7 @@ export function Login() {
   const mm = String(Math.floor(lockSecs / 60)).padStart(1, '0');
   const ss = String(lockSecs % 60).padStart(2, '0');
   if (picker) {
-    const list = [...(roles.data?.accounts ?? [])].sort((x, y) => ORDER.indexOf(x.role) - ORDER.indexOf(y.role) || x.email.localeCompare(y.email));
+    const list = (roles.data?.accounts ?? []).filter((a) => ORDER.includes(a.role)).sort((x, y) => ORDER.indexOf(x.role) - ORDER.indexOf(y.role) || x.email.localeCompare(y.email));
     return (
       <div className="login-wrap">
         <div className="card login-card stack" style={{ maxWidth: 560 }}>
@@ -90,7 +90,7 @@ export function Login() {
             {list.map((a) => (
               <button key={a.email} role="listitem" className="btn" style={{ justifyContent: 'flex-start', height: 'auto', padding: '10px 12px', textAlign: 'left' }}
                 disabled={busy} onClick={() => void pick(a)}>
-                <span><b>{roleTitle(a.role)}</b><span className="muted"> · {a.org}</span>
+                <span><b>{ROLE_NAME[a.role] ?? roleTitle(a.role)}</b><span className="muted"> · {a.org}</span>
                   <span className="muted" style={{ display: 'block', fontWeight: 400 }}>{ROLE_HINT[a.role] ?? ''}</span></span>
               </button>
             ))}

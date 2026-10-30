@@ -79,15 +79,16 @@ async def test_full_run_through_api_persists_everything(w):  # noqa: F811
         assert {m.side for m in mandates} == {"buyer", "supplier"} and all(len(m.signature) == 64 for m in mandates)
         hold = (await s.execute(select(LedgerHold).where(LedgerHold.project_id == u))).scalar_one()
         assert hold.status is HoldStatusEnum.HELD
-    # only FINANCE can release the hold, through its approval
+    # only the buyer user can release the hold (bank details are confirmed in the same decision); admins and other roles cannot
     left = await pending(w, pid)
     assert [a["kind"] for a in left] == ["HOLD_RELEASE"]
-    fin = await w.client("finance")
-    assert (await (await w.client("buyer")).post(f"/approvals/{left[0]['id']}/resolve", {"status": "APPROVED", "version": 1})).status_code == 403
-    assert (await fin.post(f"/approvals/{left[0]['id']}/resolve", {"status": "APPROVED", "version": 1})).status_code == 200
+    url = f"/approvals/{left[0]['id']}/resolve"
+    for who in ("finance", "org_admin", "admin", "evaluator"):
+        assert (await (await w.client(who)).post(url, {"status": "APPROVED", "version": 1})).status_code in (403, 404), who
+    assert (await (await w.client("buyer")).post(url, {"status": "APPROVED", "version": 1})).status_code == 200
     async with dbm.get_sessionmaker()() as s:
         hold = (await s.execute(select(LedgerHold).where(LedgerHold.project_id == uuid.UUID(pid)))).scalar_one()
-        assert hold.status is HoldStatusEnum.RELEASED and hold.released_by == str(w.ids["finance"])
+        assert hold.status is HoldStatusEnum.RELEASED and hold.released_by == str(w.ids["buyer"])
     assert (await ev.get(f"/projects/{pid}/audit/verify")).json()["valid"] is True
     # a human decision is on the record with its approver
     approvals = (await ev.get(f"/projects/{pid}/escalations")).json()["items"]
@@ -123,8 +124,14 @@ async def test_optimistic_lock_and_resolve_rules(w):  # noqa: F811
 async def test_reject_with_comment_stops_run_and_start_is_not_repeatable(w):  # noqa: F811
     pid = await create_and_start(w)
     b = await w.client("buyer")
-    a = (await pending(w, pid))[0]
-    r = await b.post(f"/approvals/{a['id']}/resolve", {"status": "REJECTED", "version": a["version"], "comment": "requirement is wrong"})
+    for _ in range(10):  # approve anything that is not the award; the award is the decision the buyer refuses
+        a = (await pending(w, pid))[0]
+        if a["kind"] == "AWARD":
+            break
+        assert (await b.post(f"/approvals/{a['id']}/resolve", {"status": "APPROVED", "version": a["version"]})).status_code == 200
+        await w.service.join(pid)
+    assert a["kind"] == "AWARD"
+    r = await b.post(f"/approvals/{a['id']}/resolve", {"status": "REJECTED", "version": a["version"], "comment": "award is wrong"})
     assert r.status_code == 200
     await w.service.join(pid)
     proj = (await b.get(f"/projects/{pid}")).json()

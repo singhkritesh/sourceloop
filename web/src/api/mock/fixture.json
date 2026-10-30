@@ -879,7 +879,7 @@
    "description": "Stage order and mandatory stages are fixed"
   },
   {
-   "id": "INV_HOLD_RELEASE_FINANCE",
+   "id": "INV_HOLD_RELEASE_BUYER",
    "title": "Payment hold release only by FINANCE (and other human checkpoints stay human)",
    "description": "Segregation of duties"
   },

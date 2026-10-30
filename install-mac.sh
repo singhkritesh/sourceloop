@@ -2,16 +2,18 @@
 # One-command setup for a MacBook, sized for a 4b local model (qwen3.5:4b, ~3.4 GB on disk, ~5 GB RAM while loaded).
 # Installs what is missing (Homebrew, Docker Desktop, Ollama), pulls the model, writes .env, builds, starts, seeds and opens the app in your browser.
 # Usage: ./install-mac.sh [--model qwen3.5:4b] [--no-start] [--live]
-#   --live   makes new projects use the local model (LLM_MODE=live); default is replay (recorded answers, no model needed)
+#   --replay plays back recorded answers instead of running the model (repeatable, no model needed); the default is a live run where
+#            the local model reads what you type and the agents act on it
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")"
 C='\033[0;36m'; G='\033[0;32m'; Y='\033[1;33m'; R='\033[0;31m'; N='\033[0m'
 info(){ printf "${C}[INFO]${N}  %s\n" "$*"; }; ok(){ printf "${G}[OK]${N}    %s\n" "$*"; }
 warn(){ printf "${Y}[WARN]${N}  %s\n" "$*"; }; die(){ printf "${R}[ERROR]${N} %s\n" "$*" >&2; exit 1; }
-MODEL="qwen3.5:4b"; START=true; LIVE=false
+MODEL="qwen3.5:4b"; START=true; LIVE=true
 while [ $# -gt 0 ]; do case "$1" in
   --model) MODEL="${2:?--model needs a name}"; shift 2;;
   --no-start) START=false; shift;;
+  --replay) LIVE=false; shift;;
   --live) LIVE=true; shift;;
   *) die "unknown flag $1";; esac; done
 
@@ -54,7 +56,7 @@ curl -sf localhost:11434/api/chat -d "{\"model\":\"$MODEL\",\"stream\":false,\"t
 # Point the first Studio config at the 4b model (read once by the seed; Studio edits it afterwards)
 setenv(){ if grep -q "^$1=" .env; then sed -i.bak "s|^$1=.*|$1=$2|" .env && rm -f .env.bak; else printf '%s=%s\n' "$1" "$2" >> .env; fi; }
 setenv SL_FAST_MODEL "$MODEL"; setenv SL_CHAT_MODEL "$MODEL"
-$LIVE && setenv LLM_MODE live
+setenv LLM_MODE "$($LIVE && echo live || echo replay)"
 ok ".env: fast and chat models = $MODEL, LLM_MODE=$($LIVE && echo live || echo replay)"
 [ -f data/demo-creds.txt ] && warn "data/demo-creds.txt exists, so the database is already seeded with its old model names. For a clean start: ./stop.sh && docker compose down -v && rm data/demo-creds.txt"
 
@@ -62,4 +64,4 @@ $START || { printf "\n${G}Setup done.${N} Next: ./start.sh\n"; exit 0; }
 ./start.sh
 ./doctor.sh || true
 open http://localhost:3010 2>/dev/null || true   # show the app in the default browser
-printf "\n  Model:  $MODEL (loaded only while a project runs, unloaded when it finishes or fails)\n  Mode:   switch replay/live in Settings, or re-run with --live\n"
+printf "\n  Model:  $MODEL (loaded only while a project runs, unloaded when it finishes or fails)\n  Mode:   live (the model reads what you type). Replay: ./install-mac.sh --replay\n"

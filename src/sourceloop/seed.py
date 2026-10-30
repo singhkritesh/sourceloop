@@ -39,7 +39,7 @@ from sourceloop.data.synthetic import TODAY
 from sourceloop.orchestrator.scenario import build_project, run_to_completion
 
 DOMAIN = "sourceloop.test"
-BUYER_ROLES = (R.BUYER, R.COMPLIANCE, R.QUALITY, R.LEGAL, R.FINANCE)
+BUYER_ROLES = (R.BUYER,)  # the buyer user makes every buyer-side decision; admins only set rules and mediate
 
 
 async def _load_registry(s, seed: int, now) -> int:
@@ -94,7 +94,6 @@ async def seed(seed_value: int = 42) -> list[tuple[str, str, str]]:
             orgs[name] = o
         plan: list[tuple[str, R, Organization]] = [(f"{r.value.lower()}@{DOMAIN}", r, orgs["Acme Industrial Buyer"]) for r in BUYER_ROLES]
         plan.append((f"buyer2@{DOMAIN}", R.BUYER, orgs["Globex Procurement"]))
-        plan += [(f"{r.value.lower()}@{DOMAIN}", r, orgs["SourceLoop Platform"]) for r in (R.EVALUATOR, R.DESIGNER)]
         plan.append((f"superadmin@{DOMAIN}", R.SUPER_ADMIN, orgs["SourceLoop Platform"]))  # SBN operator: all access
         plan.append((f"buyeradmin@{DOMAIN}", R.ADMIN, orgs["Acme Industrial Buyer"]))  # organization admin of the buyer org
         for i, sid in enumerate(demo_suppliers, start=1):

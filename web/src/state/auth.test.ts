@@ -35,9 +35,9 @@ describe('who may do what in the UI (the server enforces every one of these)', (
     expect(who(can.resume)).toEqual(['BUYER', 'ADMIN', 'SUPER_ADMIN']);
     expect(who(can.stop)).toEqual(['BUYER', 'ADMIN', 'SUPER_ADMIN']);
   });
-  it('approvals: buyer-side roles decide; the evaluator reads; suppliers have none', () => {
-    expect(who(can.seeApprovals)).toEqual(['BUYER', 'COMPLIANCE', 'QUALITY', 'LEGAL', 'FINANCE', 'EVALUATOR', 'ADMIN', 'SUPER_ADMIN']);
-    expect(who(can.resolveApprovals)).toEqual(['BUYER', 'COMPLIANCE', 'QUALITY', 'LEGAL', 'FINANCE', 'ADMIN', 'SUPER_ADMIN']);
+  it('approvals: only the buyer decides; admins and the evaluator can look; suppliers have none', () => {
+    expect(who(can.seeApprovals)).toEqual(['BUYER', 'EVALUATOR', 'ADMIN', 'SUPER_ADMIN']);
+    expect(who(can.resolveApprovals)).toEqual(['BUYER']);   // admins set rules and mediate; they never approve
     expect(can.seeApprovals('SUPPLIER')).toBe(false);
   });
 });

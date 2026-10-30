@@ -50,8 +50,9 @@ runs are deterministic in replay mode; local models are loaded only while a task
                     +------------- Ollama (host, optional, live mode only) via net/safe_http
 ```
 
-Humans stay in the loop for compliance flags, technical qualification, award, locked clauses (liability, termination, ip), signature, bank details
-and payment-hold release. These are invariants (`studio/invariants.py`); no Studio field can disable them.
+Humans stay in the loop only where it is truly needed, and it is always the buyer user: a flagged supplier, the award, a changed locked clause
+(liability, termination, ip) and one final decision that confirms bank details and releases the payment hold. Technical pass/fail and signature are
+settled by rules and recorded in the audit log. Admins set rules and mediate; they never approve. These are code-owned (`studio/invariants.py`); no Studio field can disable them.
 
 ## Quickstart
 
@@ -152,5 +153,5 @@ uses a temporary port 8006 on a COPY of the e2e DB for the tamper, auth-throttle
 
 ## Roles and perspectives
 
-Every login sees a project from its own side only. Buyer-side users (Buyer, Compliance, Quality, Legal, Finance) get a business view: the need, the candidate suppliers and how they screened, offers, the award, the contract and the human decisions. They never see the agent workflow. Suppliers see only their own thread. The workflow, and how each agent behaved, is for inspectors: **SBN's super admin and evaluator** (everywhere) and an **organization admin** (its own side). The organization admin manages its own organization's people and tunes its own agents (versioned, validated, never touching safety rules). Details and the full matrix: `docs/05-roles-and-perspectives.md`.
+Every login sees a project from its own side only. The buyer user gets a business view: the need, the candidate suppliers and how they screened, offers, the award, the contract and the human decisions. They never see the agent workflow. Suppliers see only their own thread. The workflow, and how each agent behaved, is for inspectors: **SBN's super admin and evaluator** (everywhere) and an **organization admin** (its own side). The organization admin manages its own organization's people and tunes its own agents (versioned, validated, never touching safety rules). Details and the full matrix: `docs/05-roles-and-perspectives.md`.
 

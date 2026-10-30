@@ -43,7 +43,7 @@ setUnauthenticatedHandler(() => {
 });
 
 // UI affordances only; the server enforces every one of these.
-const BUYER_SIDE: Role[] = ['BUYER', 'COMPLIANCE', 'QUALITY', 'LEGAL', 'FINANCE'];
+const BUYER_SIDE: Role[] = ['BUYER'];
 /** The admin of a SUPPLIER organization sees the supplier view of a project, never the buyer's side. */
 export const isSupplierScoped = (me?: Me | null): boolean => me?.role === 'SUPPLIER' || (me?.role === 'ADMIN' && me.org.kind === 'SUPPLIER');
 /** Inspectors may open the agent workflow: SBN's super admin and evaluator everywhere, an org admin for its own organization. */
@@ -57,7 +57,7 @@ export const can = {
   verifyAudit: (r?: Role) => r === 'EVALUATOR' || r === 'ADMIN' || r === 'SUPER_ADMIN',
   seeProjects: (r?: Role) => !!r && r !== 'DESIGNER',
   seeApprovals: (r?: Role) => !!r && [...BUYER_SIDE, 'EVALUATOR', 'ADMIN', 'SUPER_ADMIN'].includes(r),
-  resolveApprovals: (r?: Role) => !!r && [...BUYER_SIDE, 'ADMIN', 'SUPER_ADMIN'].includes(r),
+  resolveApprovals: (r?: Role) => r === 'BUYER',   // admins set rules and mediate; they never approve
   seeStudio: (r?: Role) => r === 'DESIGNER' || r === 'SUPER_ADMIN' || r === 'EVALUATOR',
   editDraft: (r?: Role) => r === 'DESIGNER' || r === 'SUPER_ADMIN',
   adminStudio: (r?: Role) => r === 'SUPER_ADMIN',

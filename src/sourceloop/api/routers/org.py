@@ -34,7 +34,7 @@ router = APIRouter(tags=["organization"])
 READ = (R.ADMIN, R.SUPER_ADMIN, R.EVALUATOR)
 WRITE = (R.ADMIN, R.SUPER_ADMIN)
 ROLES_BY_KIND: dict[str, tuple[R, ...]] = {
-    "BUYER": (R.BUYER, R.COMPLIANCE, R.QUALITY, R.LEGAL, R.FINANCE, R.ADMIN),
+    "BUYER": (R.BUYER, R.ADMIN),  # the buyer user makes every buyer-side decision; the admin only manages the organization
     "SUPPLIER": (R.SUPPLIER, R.ADMIN),
 }
 PLATFORM_STAFF = (R.EVALUATOR, R.DESIGNER, R.SUPER_ADMIN)

@@ -48,7 +48,7 @@ _SWITCH_PATTERNS: dict[str, re.Pattern[str]] = {
     "INV_MANDATE_SECRECY": re.compile(r"secrecy|reveal|counterparty|expose|share_?mandate", re.I),
     "INV_WATCHLIST_NO_AUTOCLEAR": re.compile(r"watchlist|auto_?clear", re.I),
     "INV_RULES_ONLY_QUAL": re.compile(r"qual_?status|llm_?qual|auto_?qualif", re.I),
-    "INV_HOLD_RELEASE_FINANCE": re.compile(r"hold_?release|release_?role", re.I),
+    "INV_HOLD_RELEASE_BUYER": re.compile(r"hold_?release|release_?role", re.I),
     "INV_WRAPPER_PRESENT": re.compile(r"wrapper|preamble|untrusted", re.I),
     "INV_FAIL_CLOSED": re.compile(r"fail_?(open|closed)|blank_?(is_)?pass|treat_?missing", re.I),
     "INV_LLM_NEVER_EXECUTED": re.compile(r"auto_?(exec|approve|award|sign)|execute_?llm", re.I),
@@ -175,11 +175,10 @@ def _inv_stages(cfg: Any, raw: Any) -> list[Violation]:
 def _inv_human_roles(cfg: Any, raw: Any) -> list[Violation]:
     """Checks the code-owned role map (the config has no say in it). Fails if the runtime mapping was weakened."""
     out = []
-    want = {AK.HOLD_RELEASE: R.FINANCE, AK.BANK_DETAILS: R.FINANCE, AK.CLAUSE: R.LEGAL, AK.SIGNATURE: R.LEGAL,
-            AK.COMPLIANCE_FLAG: R.COMPLIANCE, AK.TECHNICAL_QUAL: R.QUALITY}
+    want = {AK.HOLD_RELEASE: R.BUYER, AK.CLAUSE: R.BUYER, AK.COMPLIANCE_FLAG: R.BUYER, AK.AWARD: R.BUYER}
     for kind, role in want.items():
         if KIND_ROLE.get(kind) is not role:
-            out.append(Violation("INV_HOLD_RELEASE_FINANCE" if kind is AK.HOLD_RELEASE else "INV_HUMAN_CHECKPOINTS",
+            out.append(Violation("INV_HOLD_RELEASE_BUYER" if kind is AK.HOLD_RELEASE else "INV_HUMAN_CHECKPOINTS",
                                  f"approvals.{kind.value}", f"{kind.value} must be resolved by {role.value}"))
     return out
 
@@ -239,7 +238,7 @@ INVARIANTS: tuple[Invariant, ...] = (
     Invariant("INV_COMPLIANCE_TOOL_ALLOWED", "The compliance screen stays in the buyer lead's tool allowlist", "A removable screen is a bypass of sanctions/forced-labor control", _inv_compliance_tool_allowed),
     Invariant("INV_CONTRACT_AUTONOMY_MAX_L2", "Contracting autonomy <= L2", "Contract acts need human approval", _inv_autonomy),
     Invariant("INV_STAGES_FIXED", "Only optional stages may be disabled", "Stage order and mandatory stages are fixed", _inv_stages),
-    Invariant("INV_HOLD_RELEASE_FINANCE", "Payment hold release only by FINANCE (and other human checkpoints stay human)", "Segregation of duties", _inv_human_roles),
+    Invariant("INV_HOLD_RELEASE_BUYER", "Payment release, the award, compliance flags and locked-clause changes stay with a human buyer user; admins never approve", "Admins set rules and mediate; they never approve", _inv_human_roles),
     Invariant("INV_WRAPPER_PRESENT", "Untrusted-data wrapper, English preamble and schema suffix are code-owned", "A body that replaces the wrapper is an injection tool", _inv_wrapper),
     Invariant("INV_RULES_ADD_ONLY", "Configured rules can only add stops", "Config must not weaken invariant rules", _inv_rules_add_only),
     Invariant("INV_FAIL_CLOSED", "Validation, parse and timeout errors fail closed", "Blank never means pass", _fixed("INV_FAIL_CLOSED")),

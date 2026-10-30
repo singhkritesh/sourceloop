@@ -83,7 +83,7 @@ def test_strict_and_frozen():
     ("audit_enabled", "INV_AUDIT_CHAIN"), ("hash_chain", "INV_AUDIT_CHAIN"), ("signing_required", "INV_SIGNING"),
     ("skip_policy", "INV_MANDATE_ENFORCEMENT"), ("expose_counterparty_mandate", "INV_MANDATE_SECRECY"),
     ("watchlist_auto_clear", "INV_WATCHLIST_NO_AUTOCLEAR"), ("llm_qual_status", "INV_RULES_ONLY_QUAL"),
-    ("hold_release_role", "INV_HOLD_RELEASE_FINANCE"), ("untrusted_wrapper", "INV_WRAPPER_PRESENT"),
+    ("hold_release_role", "INV_HOLD_RELEASE_BUYER"), ("untrusted_wrapper", "INV_WRAPPER_PRESENT"),
     ("fail_open", "INV_FAIL_CLOSED"), ("auto_approve", "INV_LLM_NEVER_EXECUTED"), ("api_key", "INV_NO_SECRETS"),
 ])
 def test_raw_dict_switches_are_rejected_top_level_and_nested(key, inv_id):
@@ -167,8 +167,9 @@ def test_compliance_autonomy_stages_wrapper_rules_secrets():
 
 
 def test_human_checkpoint_roles_are_checked_in_code(monkeypatch):
-    monkeypatch.setitem(approvals.KIND_ROLE, AK.HOLD_RELEASE, RoleEnum.BUYER)
-    assert "INV_HOLD_RELEASE_FINANCE" in ids(check_invariants(default_config()))
+    assert "INV_HOLD_RELEASE_BUYER" not in ids(check_invariants(default_config()))
+    monkeypatch.setitem(approvals.KIND_ROLE, AK.HOLD_RELEASE, RoleEnum.ADMIN)  # an admin must never become an approver
+    assert "INV_HOLD_RELEASE_BUYER" in ids(check_invariants(default_config()))
 
 
 def test_check_fails_closed_on_garbage():
@@ -179,7 +180,7 @@ def test_check_fails_closed_on_garbage():
 
 def test_catalog_lists_all():
     cat = invariant_catalog()
-    assert {c["id"] for c in cat} >= {"INV_LOCKED_CLAUSES", "INV_AUDIT_CHAIN", "INV_HOLD_RELEASE_FINANCE"}
+    assert {c["id"] for c in cat} >= {"INV_LOCKED_CLAUSES", "INV_AUDIT_CHAIN", "INV_HOLD_RELEASE_BUYER"}
     assert all(c["reason"] for c in cat)
 
 
@@ -273,3 +274,9 @@ def test_agentdef_bounds():
         AgentDef(timeout_s=0)
     with pytest.raises(ValidationError):
         AgentDef(timeout_s=500)
+
+
+def test_docker_host_alias_is_private_so_a_local_provider_can_reach_the_hosts_ollama():
+    from sourceloop.studio.validator import classify_host
+    assert classify_host("host.docker.internal") == "private"
+    assert classify_host("ollama.example.com") == "public"       # any other name stays public: no DNS-based widening

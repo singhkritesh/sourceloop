@@ -2,6 +2,7 @@
 import json
 from decimal import Decimal as D
 
+from api_support import w  # noqa: F401
 from sourceloop.agents.buyer.agent import BuyerAgent
 from sourceloop.agents.common.deliberate import Move, RuleDeliberator
 from sourceloop.data.synthetic import generate
@@ -10,7 +11,6 @@ from sourceloop.llm.config import stub_config
 from sourceloop.llm.providers import StubProvider
 from sourceloop.orchestrator.runtime import RunExecutor
 from sourceloop.orchestrator.scenario import ScenarioSpec, build_project, run_to_completion
-from api_support import w  # noqa: F401
 from sourceloop.subagents.deliberation import LLMDeliberator
 
 VIS, FULL, _ = generate(42)

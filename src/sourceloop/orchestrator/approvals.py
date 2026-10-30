@@ -11,10 +11,10 @@ from sourceloop.data.enums import ApprovalKindEnum as K
 from sourceloop.data.enums import ApprovalStatusEnum as S
 from sourceloop.data.enums import RoleEnum as R
 
-# Every human checkpoint belongs to the buyer user. Admins (org ADMIN, SUPER_ADMIN) only set rules and mediate: they are never an approver.
+# Every human checkpoint belongs to the buyer user, except the awarded supplier's own confirmation of the final terms. Admins (org ADMIN, SUPER_ADMIN) only set rules and mediate: they are never an approver.
 KIND_ROLE: dict[K, R] = {
     K.REQUIREMENT: R.BUYER, K.COMPLIANCE_FLAG: R.BUYER, K.TECHNICAL_QUAL: R.BUYER, K.AWARD: R.BUYER,
-    K.CLAUSE: R.BUYER, K.SIGNATURE: R.BUYER, K.BANK_DETAILS: R.BUYER, K.HOLD_RELEASE: R.BUYER,
+    K.CLAUSE: R.BUYER, K.SIGNATURE: R.BUYER, K.SUPPLIER_ACCEPT: R.SUPPLIER, K.BANK_DETAILS: R.BUYER, K.HOLD_RELEASE: R.BUYER,
     K.MANDATE_BREACH: R.BUYER, K.LOW_CONFIDENCE: R.BUYER, K.LLM_UNAVAILABLE: R.BUYER, K.STALLED: R.BUYER,
     K.BUDGET: R.BUYER, K.RULE: R.BUYER,
 }

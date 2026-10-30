@@ -16,7 +16,7 @@ INSPECTORS = (R.EVALUATOR, R.SUPER_ADMIN, R.ADMIN)
 PROJECT_READERS = (*BUYER_SIDE, R.SUPPLIER, *INSPECTORS)
 BUYER_VIEW = (*BUYER_SIDE, *INSPECTORS)
 WORKFLOW = (R.SUPPLIER, *INSPECTORS)  # raw messages / audit / stream (a supplier gets only its own neutral thread)
-APPROVAL_ROLES = (*BUYER_SIDE, R.EVALUATOR, R.SUPER_ADMIN, R.ADMIN)
+APPROVAL_ROLES = (*BUYER_SIDE, R.SUPPLIER, R.EVALUATOR, R.SUPER_ADMIN, R.ADMIN)
 ACTORS = {  # key -> (role, relation to the project under test)
     "buyer": (R.BUYER, "own"), "compliance": (R.COMPLIANCE, "own"), "quality": (R.QUALITY, "own"), "legal": (R.LEGAL, "own"),
     "finance": (R.FINANCE, "own"), "buyer_b": (R.BUYER, "other"), "supplier1": (R.SUPPLIER, "own"), "supplier2": (R.SUPPLIER, "own"),
@@ -49,7 +49,7 @@ ROUTES = [
     ("POST", "/projects/{pid}/resume", (R.BUYER, R.ADMIN, R.SUPER_ADMIN), True, None),
     ("POST", "/projects/{pid}/start", (R.BUYER,), True, None),
     ("GET", "/approvals", APPROVAL_ROLES, False, False),
-    ("POST", "/approvals/{aid}/resolve", (*BUYER_SIDE, R.ADMIN, R.SUPER_ADMIN), True, None),
+    ("POST", "/approvals/{aid}/resolve", (*BUYER_SIDE, R.SUPPLIER, R.ADMIN, R.SUPER_ADMIN), True, None),
     ("GET", "/suppliers/search", (R.BUYER, R.EVALUATOR, R.ADMIN, R.SUPER_ADMIN), False, False),
     # ---- organization administration (users / own-side settings / SBN's organizations). Per-user and per-version routes
     # (PATCH /org/users/{id}, .../reset-password, POST /org/overrides/rollback) are tenant-scoped by id and covered in test_org_admin.py.
@@ -123,6 +123,8 @@ def expected(role: R, relation: str, allowed: tuple, scoped: bool, evaluator_wri
             return {"403"}
         if tmpl in ITEM_ROLE:
             return {"404"}  # the approval belongs to the buyer's project: not visible to it
+    if role is R.SUPPLIER and tmpl in ITEM_ROLE:
+        return {"404"}  # a supplier user sees only checkpoints addressed to it for its own terms; the buyer's item does not exist for it
     if role is R.EVALUATOR and evaluator_write:
         return {"403"}
     if scoped and relation == "other":
@@ -188,7 +190,7 @@ async def test_resolve_wrong_role_vs_cross_tenant(w, parked):  # noqa: F811
     assert (await (await w.client("admin")).post(f"/approvals/{aid}/resolve", body)).status_code == 403  # SUPER_ADMIN cannot approve QUALITY items
     assert (await (await w.client("org_admin")).post(f"/approvals/{aid}/resolve", body)).status_code == 403  # nor can the org admin
     assert (await (await w.client("buyer_b")).post(f"/approvals/{aid}/resolve", body)).status_code == 404  # other tenant
-    assert (await (await w.client("supplier1")).post(f"/approvals/{aid}/resolve", body)).status_code == 403
+    assert (await (await w.client("supplier1")).post(f"/approvals/{aid}/resolve", body)).status_code == 404  # not its item: hidden, not forbidden
     assert (await (await w.client("quality")).post(f"/approvals/{uuid.uuid4()}/resolve", body)).status_code == 404
 
 
@@ -203,6 +205,6 @@ async def test_list_endpoints_are_scoped_in_sql(w, parked):  # noqa: F811
     # approvals inbox is role-scoped and tenant-scoped
     assert (await (await w.client("buyer_b")).get("/approvals")).json()["items"] == []
     assert all(a["target_role"] == "BUYER" for a in (await (await w.client("buyer")).get("/approvals")).json()["items"])
-    assert (await (await w.client("supplier1")).get("/approvals")).status_code == 403
+    assert (await (await w.client("supplier1")).get("/approvals")).json()["items"] == []  # a supplier sees only the checkpoints addressed to it
     sup = (await (await w.client("supplier1")).get(f"/projects/{pid}")).json()
     assert set(sup) == {"id", "title", "stage", "status", "outcome", "version", "created_at", "updated_at"}  # no brief / need text

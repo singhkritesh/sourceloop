@@ -300,3 +300,35 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
 .stat b { display: block; margin-top: 2px; }
 .secret { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px dashed var(--border-strong); border-radius: var(--radius-sm); background: var(--surface-2); }
 .secret code { font-size: 16px; letter-spacing: .02em; flex: 1; word-break: break-all; }
+/* readiness: three plain columns, stacked on a phone */
+.ready-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.ready-col h3 { font-size: 13px; margin: 0 0 8px; display: flex; align-items: center; gap: 8px; }
+@media (max-width: 860px) { .ready-grid { grid-template-columns: 1fr; } }
+/* negotiation: a conversation per supplier, buyer on one side and supplier on the other */
+.neg-threads { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+.neg-thread h3 { font-size: 13px; margin: 0 0 8px; }
+.neg-list { gap: 8px; }
+.neg-step { display: flex; }
+.neg-step.buyer { justify-content: flex-end; }
+.neg-bubble { max-width: 92%; padding: 8px 12px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface-2); }
+.neg-step.buyer .neg-bubble { background: var(--accent-soft, var(--surface-2)); border-color: var(--accent, var(--border)); }
+.neg-judge { margin-top: 4px; font-size: 12.5px; }
+.neg-when summary { cursor: pointer; font-weight: 600; margin-bottom: 8px; }
+/* chat-style decisions: phone first */
+.chat { max-width: 640px; margin: 0 auto; }
+.chat-thread { display: flex; flex-direction: column; gap: 12px; }
+.chat-row { display: flex; }
+.chat-row.me { justify-content: flex-end; }
+.chat-bubble { max-width: 94%; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--border); background: var(--surface); }
+.chat-row.me .chat-bubble { background: var(--surface-2); font-size: 13.5px; }
+.chat-bubble p { margin: 4px 0 6px; }
+.chat-facts { margin: 0 0 8px; padding-left: 18px; font-size: 13.5px; }
+.chat-quick { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.chat-quick .btn { min-height: 44px; }
+@media (max-width: 640px) {
+  .topbar .nav { overflow-x: auto; white-space: nowrap; }
+  .topbar .who .email { display: none; }
+  .chat-bubble { max-width: 100%; }
+  .chat-quick .btn { flex: 1 1 100%; }
+}
+@media (max-width: 640px) { .card { overflow-x: auto; } .card .table { min-width: 520px; } }

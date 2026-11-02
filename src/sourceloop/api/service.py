@@ -568,6 +568,7 @@ class ProjectService:
         new_suppliers: set[str] = set()
         rounds = dict(h.rounds)
         added_approvals: dict[str, uuid.UUID] = {}
+        to_tell: list[tuple[str, str]] = []
         newly_resolved: set[str] = set()
         calls = list(h.pending_calls)  # removed from the handle only after the commit
         call_ord = h.call_ord
@@ -614,6 +615,8 @@ class ProjectService:
                                    version=a.version, created_at=now)
                     s.add(row)
                     added_approvals[a.id] = row.id
+                    if a.status is AS.PENDING:
+                        to_tell.append((a.kind.value, a.target_role.value))
                     if a.kind.value == "SUPPLIER_ACCEPT" and self.settings.demo_role_login and isinstance(a.evidence.get("supplier"), str):
                         await self._ensure_demo_supplier_user(s, a.evidence["supplier"])
                     if a.status is not AS.PENDING:
@@ -668,6 +671,10 @@ class ProjectService:
         if wrote_state:
             h.last_state = state
         h.synced_seq = max(h.synced_seq, target_seq)
+        if to_tell and self.settings.notify_webhook_url:  # after the commit and the audit: a push is a side effect
+            from sourceloop.api.notify import notify_decision
+            for kind, role in to_tell:
+                await notify_decision(self.settings.notify_webhook_url, self.settings.app_base_url, kind.replace('_', ' ').capitalize(), role)
 
     async def _apply_resolution(self, s: AsyncSession, pid: uuid.UUID, ref: uuid.UUID | str, kind: Any, status: AS,
                                 resolver: str, comment: str, edit: dict[str, Any], new_version: int, now: Any, *,

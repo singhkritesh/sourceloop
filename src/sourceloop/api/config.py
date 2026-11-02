@@ -47,6 +47,8 @@ class Settings:
     max_baseline_runs: int = 2
     log_level: str = "INFO"
     audit_anchor_path: str = ""  # external append-only anchor file (empty = off). Compose / start.sh --local set it
+    notify_webhook_url: str = ""  # chat webhook that is told when a decision is waiting (empty = off); the text carries no business data
+    app_base_url: str = "http://localhost:3010"  # used in that message
     cookie_secure: bool | None = None  # None => dev: Secure unless the request host is localhost; prod: always true (config, not Host)
 
     @property
@@ -101,6 +103,8 @@ def load_settings(**overrides: object) -> Settings:
         log_level=e.get("LOG_LEVEL", "INFO").upper(),
         audit_anchor_path=e.get("AUDIT_ANCHOR_PATH", ""),
         demo_role_login=env != "prod" and e.get("DEMO_ROLE_LOGIN", "true").lower() == "true",
+        notify_webhook_url=e.get("NOTIFY_WEBHOOK_URL", ""),
+        app_base_url=e.get("APP_BASE_URL", "http://localhost:3010"),
         registration_enabled=e.get("REGISTRATION_ENABLED", "false" if env == "prod" else "true").lower() == "true",
         max_active_projects_per_org=int(e.get("MAX_ACTIVE_PROJECTS_PER_ORG", "20")),
         trusted_proxy_hops=max(0, int(e.get("TRUSTED_PROXY_HOPS", "0"))),

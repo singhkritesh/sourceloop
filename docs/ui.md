@@ -71,3 +71,11 @@ New port: **3010** (web dev / preview). Update the global port registry.
 * `GET /api/v1/reviewers/override-rates` (ADMIN / EVALUATOR) feeds the "Reviewer override rates" table on the Settings page; reviewers flagged
   `POSSIBLE_RUBBER_STAMP` are listed there.
 * The approvals inbox shows an OVERDUE badge for pending items past their SLA (`due_at` / `overdue` in the list response).
+
+## Answering from a phone (Chat)
+
+`/assistant` ("Chat" in the top bar) shows each waiting decision as a short message from your agent with one-tap answers (Approve, Pick another, Decline with a reason). It is built for a phone: large buttons, one column, and the page can be added to the home screen (web app manifest).
+
+* **Notifications while the page or app is open:** the "Notify me" button asks the browser for permission; new decisions then raise a notification.
+* **Push to a chat tool:** set `NOTIFY_WEBHOOK_URL` (Slack, Teams, ntfy ...) and `APP_BASE_URL`. Each new decision posts one line with a link to `/assistant`. The text names the decision only, never prices, suppliers or limits; the call goes through the egress guard and a failure never affects a run.
+* A supplier's user gets the same page for the one decision that is theirs (confirming the final terms).

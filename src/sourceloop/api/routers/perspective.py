@@ -33,6 +33,8 @@ from sourceloop.data.models import (
     Approval,
     AuditEvent,
     Contract,
+    Mandate,
+    Message,
     Offer,
     Project,
     ProjectSupplier,
@@ -77,6 +79,62 @@ async def _judged_turns(db: AsyncSession, pid: uuid.UUID, only_supplier_side_of:
     return out
 
 
+async def _info_requests(db: AsyncSession, pid: uuid.UUID) -> dict[str, dict[str, Any]]:
+    """Per supplier: did the buyer's agent ask for missing information, did the supplier answer (declared, not verified), was it chased."""
+    out: dict[str, dict[str, Any]] = {}
+    rows = (await db.execute(select(Message).where(Message.project_id == pid, Message.type.in_(("RFI", "RFI_REPLY", "FOLLOW_UP"))).order_by(Message.seq))).scalars()
+    for m in rows:
+        sid = (m.to_agent if m.from_agent == "buyer" else m.from_agent).split(":", 1)[-1]
+        d = out.setdefault(sid, {"asked_for": [], "answered": False, "chased": False})
+        if m.type.value == "RFI":
+            d["asked_for"] = list(m.payload.get("fields", []))
+        elif m.type.value == "RFI_REPLY":
+            d["answered"] = True
+        elif m.payload.get("about") == "RFQ":
+            d["chased"] = True
+    return out
+
+
+async def _negotiation(db: AsyncSession, proj: Project, offers: list[Offer], names: dict[str, str]) -> dict[str, Any]:
+    """How each negotiation went, step by step, from the buyer's side: every quote and counter, who chose the move (the model or the rule), the judge's
+    verdict, the buyer's OWN limits, and the points where a person is asked. The supplier's limits never appear (the buyer cannot know them)."""
+    rows = list((await db.execute(select(AuditEvent).where(AuditEvent.project_id == str(proj.id), AuditEvent.action.in_(("agent_decision", "negotiation_judged")))
+                                  .order_by(AuditEvent.seq))).scalars()) if True else []
+    dec: dict[tuple[str, int, str], dict[str, Any]] = {}
+    verdict: dict[tuple[str, int, str], dict[str, Any]] = {}
+    for r in rows:
+        ev = (r.evidence or [{}])[0] if isinstance(r.evidence, list) else {}
+        sid, rnd = ev.get("supplier"), ev.get("round")
+        if sid is None or rnd is None:
+            continue
+        if r.action == "agent_decision":
+            who = "buyer" if ev.get("agent") == "buyer" else "supplier"
+            dec[(sid, int(rnd), who)] = {"chosen": ev.get("chosen"), "source": ev.get("source"), "rule": ev.get("rule"), "confidence": ev.get("confidence"),
+                                         "fallback": ev.get("fallback")}
+        else:
+            verdict[(sid, int(rnd), str(ev.get("actor")))] = {"level": r.outcome, "notes": [CODES[c][1] for c in ev.get("codes", []) if c in CODES]}
+    threads: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for o in offers:
+        who = "supplier" if o.side == "supplier" else "buyer"
+        # the move that PRODUCED this step is the one its author chose in the previous round (buyer counters at round r answer the supplier's round-r quote)
+        step = {"round": o.round, "by": who, "unit_price": str(o.unit_price), "lead_time_weeks": o.lead_time_weeks,
+                "move": dec.get((o.supplier_id, o.round if who == "buyer" else o.round - 1, who)), "judge": verdict.get((o.supplier_id, o.round, who))}
+        threads[o.supplier_id].append(step)
+    m = (await db.get(Mandate, proj.buyer_mandate_id)) if proj.buyer_mandate_id else None
+    pl = m.payload if m else {}
+    limits = {"target_unit_price": pl.get("target_unit_price"), "highest_unit_price": pl.get("max_unit_price"), "max_rounds": pl.get("max_rounds"),
+              "min_step_pct": pl.get("min_step_pct")} if pl else None
+    return {"limits": limits, "threads": [{"supplier_id": s, "name": names.get(s, s), "steps": sorted(v, key=lambda x: (x["round"], x["by"] != "supplier"))}  # the supplier quotes first in each round
+                        for s, v in sorted(threads.items())],
+            "when_a_person_decides": [
+                {"kind": "COMPLIANCE_FLAG", "text": "A supplier cannot be cleared by the rules (sanctions hit, missing data that was not supplied, risk)."},
+                {"kind": "AWARD", "text": "Always: choosing the winner commits the company."},
+                {"kind": "SUPPLIER_ACCEPT", "text": "The awarded supplier's own person confirms the final terms."},
+                {"kind": "CLAUSE", "text": "Only if a supplier tries to change liability, termination or IP."},
+                {"kind": "HOLD_RELEASE", "text": "Always, once: confirm bank details and release payment."}],
+            "agents_decide": "Counter-offers, accepting a quote and walking away are chosen by the agents inside the limits above; nothing outside them can be sent."}
+
+
 async def _buyer_overview(db: AsyncSession, proj: Project) -> dict[str, Any]:
     pid = proj.id
     sups = (await db.execute(select(ProjectSupplier, Supplier).join(Supplier, Supplier.id == ProjectSupplier.supplier_id)
@@ -87,12 +145,13 @@ async def _buyer_overview(db: AsyncSession, proj: Project) -> dict[str, Any]:
     for o in offers:
         if o.side == "supplier":
             last[o.supplier_id] = o
+    info = await _info_requests(db, pid)
     cands = []
     for ps, s in sups:
         lo = last.get(s.id)
         cands.append({"supplier_id": s.id, "name": s.name, "country": s.country,
                       "qualification": ps.qual_status.value if ps.qual_status else None, "reasons": list(ps.qual_reasons or []),
-                      "rounds": ps.round_count, "latest_offer": _offer_out(lo) if lo else None,
+                      "rounds": ps.round_count, "latest_offer": _offer_out(lo) if lo else None, "info": info.get(s.id),
                       "awarded": bool(contract and contract.supplier_id == s.id)})
     award = None
     if contract:
@@ -106,7 +165,8 @@ async def _buyer_overview(db: AsyncSession, proj: Project) -> dict[str, Any]:
     return {"perspective": "buyer", "candidates": cands, "offers": [_offer_out(o) for o in offers], "award": award,
             "contract": ({"status": contract.status, "signed": contract.status == "SIGNED", "clauses": list(contract.clauses or []),
                           "deviations": list(contract.deviations or [])} if contract else None),
-            "decisions": decisions, "milestones": await _milestones(db, pid), "negotiation_review": await _judged_turns(db, pid)}
+            "decisions": decisions, "milestones": await _milestones(db, pid), "negotiation_review": await _judged_turns(db, pid),
+            "negotiation": await _negotiation(db, proj, [o for o in offers], {s.id: s.name for _, s in sups})}
 
 
 async def _supplier_overview(db: AsyncSession, proj: Project, p: Principal) -> dict[str, Any]:

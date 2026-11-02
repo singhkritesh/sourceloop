@@ -123,7 +123,7 @@ export interface SettingsView {
 export interface OfferRow { supplier_id: string; round: number; side: 'supplier' | 'buyer' | 'you'; unit_price: string; lead_time_weeks: number; capacity_units?: number | null }
 export interface Candidate {
   supplier_id: string; name: string; country: string; qualification: string | null; reasons: string[]; rounds: number;
-  latest_offer: OfferRow | null; awarded: boolean;
+  latest_offer: OfferRow | null; awarded: boolean; info?: { asked_for: string[]; answered: boolean; chased: boolean } | null;
 }
 export interface AgentPerf {
   agent: string; decisions: number; model_chosen: number; rule_used: number; fallbacks: Record<string, number>; agreement_with_rule_pct: number | null;
@@ -139,8 +139,18 @@ export interface TurnReview { supplier_id: string | null; round: number | null; 
 export interface Decision { kind: string; role: string; status: ApprovalStatus; stage: string; resolved_at: string | null; comment: string }
 export interface Milestone { stage: string; at: string }
 export interface ContractView { status: string; signed: boolean; clauses: unknown[]; deviations?: unknown[] }
+export interface NegStep {
+  round: number; by: 'buyer' | 'supplier'; unit_price: string; lead_time_weeks: number;
+  move: { chosen: string; source: 'model' | 'rule'; rule: string; confidence: number | null; fallback: string | null } | null;
+  judge: { level: 'APPROPRIATE' | 'CONCERN' | 'INAPPROPRIATE'; notes: string[] } | null;
+}
+export interface Negotiation {
+  limits: { target_unit_price: string | null; highest_unit_price: string | null; max_rounds: number | null; min_step_pct: string | null } | null;
+  threads: { supplier_id: string; name: string; steps: NegStep[] }[];
+  when_a_person_decides: { kind: string; text: string }[]; agents_decide: string;
+}
 export interface BuyerOverview {
-  perspective: 'buyer'; negotiation_review?: TurnReview[]; candidates: Candidate[]; offers: OfferRow[]; decisions: Decision[]; milestones: Milestone[];
+  perspective: 'buyer'; negotiation?: Negotiation; negotiation_review?: TurnReview[]; candidates: Candidate[]; offers: OfferRow[]; decisions: Decision[]; milestones: Milestone[];
   award: { supplier_id: string; name: string; unit_price: string | null; lead_time_weeks: number | null } | null; contract: ContractView | null;
 }
 export interface SupplierOverview { perspective: 'supplier'; negotiation_review?: TurnReview[]; offers: OfferRow[]; outcome: 'DEAL' | 'CLOSED' | null; contract?: ContractView }

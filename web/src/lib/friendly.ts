@@ -254,7 +254,7 @@ export function nextStep(i: NextStepInput): NextStep {
 }
 
 const MESSAGE_TEXT: Record<string, string> = {
-  BRIEF: 'Sourcing brief', INVITE: 'Invitation to quote', INTEREST_REPLY: 'Interest reply', DOC_REQUEST: 'Document request', DOC_SUBMISSION: 'Documents submitted',
+  BRIEF: 'Sourcing brief', INVITE: 'Invitation to quote', INTEREST_REPLY: 'Interest reply', DOC_REQUEST: 'Document request', DOC_SUBMISSION: 'Documents submitted', RFI: 'Request for information', RFI_REPLY: 'Information supplied (declared)', FOLLOW_UP: 'Follow-up reminder',
   QUAL_RESULT: 'Qualification result', RFQ: 'Request for quote', OFFER: 'Offer', COUNTER: 'Counter-offer', ACCEPT: 'Offer accepted', REJECT: 'Offer declined',
   CONTRACT_DRAFT: 'Contract draft', REDLINE: 'Contract change request', SIGN_REQUEST: 'Signature request', ONBOARD_DATA: 'Onboarding details', ESCALATE: 'Escalation',
 };

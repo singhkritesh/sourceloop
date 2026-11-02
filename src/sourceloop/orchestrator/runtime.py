@@ -72,6 +72,7 @@ class RunConfig:
     news_min_confidence: float = 0.6
     config_version: int = 1
     confirm_requirement: bool = False  # Studio workflow.checkpoints.requirement_confirmation (the only skippable checkpoint)
+    agent_rfi: bool = False  # Studio workflow.agent_rfi: the buyer agent asks suppliers with blank registry fields for them
     supplier_acceptance: bool = False  # Studio workflow.checkpoints.supplier_acceptance: the awarded supplier's user confirms the final terms
     supplier_users: frozenset[str] | None = None  # suppliers whose organization has a user account (None = not known); only those can be asked
     need_autonomy: int = 1  # Studio workflow.autonomy[NEED]; >= 3 ("act then report") auto-confirms the requirement (audited)
@@ -360,12 +361,13 @@ class RunExecutor:
                         status, reasons = "REVIEW", ["NEWS_LOW_CONFIDENCE"]
                     elif nsev >= rt.cfg.news_escalate_severity:
                         status, reasons = "REVIEW", [f"NEWS_RISK_HIGH:{','.join(news.value.kinds)}"]
-                st.qual[s] = {"status": status, "reasons": reasons, "news_sev": nsev,
+                st.qual[s] = {"status": status, "reasons": reasons, "news_sev": nsev, "news_ok": bool(news.ok), "news_conf": nconf,
                               "weather_p": wx.value.delay_probability if wx.ok and wx.value else 0.2,
                               "country": rt.supplier(s).country}
                 await rt.buyer.report_qualification(s, status, tuple(reasons))
             st.done.add("screen")
 
+        await self._rfi_round()
         flagged = {s: q for s, q in st.qual.items() if q["status"] in ("REVIEW", "BLOCKED")}
         include_override: set[str] = set()
         if flagged:
@@ -388,6 +390,36 @@ class RunExecutor:
         if not st.shortlist:
             raise Stopped(OutcomeEnum.NO_VIABLE_SUPPLIER, "empty_shortlist")
 
+    async def _rfi_round(self) -> None:
+        """Agents close information gaps themselves: a supplier held back ONLY because registry fields are blank gets one RFI; its declared figures
+        fill the blanks, the same rules decide again, and a declared pass is marked as such. No answer (or an answer that is blocked) leaves it flagged."""
+        rt, st = self.rt, self.st
+        if "rfi" in st.done or not rt.cfg.agent_rfi:
+            return
+        gaps = {s: q["reasons"][0].split(":", 1)[1].split(",") for s, q in sorted(st.qual.items())
+                if s not in st.dropped and q["status"] == "REVIEW" and len(q["reasons"]) == 1 and q["reasons"][0].startswith("MISSING_DATA:")}
+        st.done.add("rfi")
+        if not gaps:
+            return
+        res = await rt.buyer.send_all(T.RFI, [f"supplier:{s}" for s in gaps], lambda t: {"fields": gaps[t.split(":", 1)[1]]})
+        sent = [s for s in gaps if not isinstance(res[f"supplier:{s}"], Rejected)]
+        await self._supplier_round(sent)
+        declared: dict[str, tuple[tuple[str, float], ...]] = {}
+        for e in self._buyer_inbox({T.RFI_REPLY}):
+            declared[e.from_agent.split(":", 1)[1]] = tuple(sorted(e.payload["values"].items()))
+        await self._audit("rfi_round", outcome="ASKED", evidence=[{"suppliers": sorted(gaps), "answered": sorted(declared)}])
+        for s, vals in sorted(declared.items()):
+            comp = await rt.buyer.screen(rt.need, s, vals)
+            if comp.ok and comp.value and comp.value.status == "QUALIFIED":
+                q = st.qual[s]
+                status, reasons = "QUALIFIED", list(comp.value.reasons)
+                if not q.get("news_ok") or q.get("news_conf", 0.0) < rt.cfg.news_min_confidence:  # the same news checks as the first screening
+                    status, reasons = "REVIEW", ["NEWS_LOW_CONFIDENCE"]
+                elif q["news_sev"] >= rt.cfg.news_escalate_severity:
+                    status, reasons = "REVIEW", ["NEWS_RISK_HIGH"]
+                st.qual[s] = {**q, "status": status, "reasons": reasons}
+                await rt.buyer.report_qualification(s, status, tuple(reasons))
+
     async def _stage_sourcing(self) -> None:
         rt, st = self.rt, self.st
         todo = [s for s in st.shortlist if f"rfq:{s}" not in st.done]
@@ -400,6 +432,14 @@ class RunExecutor:
                 if isinstance(results[f"supplier:{s}"], Rejected):
                     st.dropped[s] = results[f"supplier:{s}"].rule_id or results[f"supplier:{s}"].code
             sub = await self._supplier_round([s for s in todo if s not in st.dropped])
+            silent = [s for s in todo if s not in st.dropped and not any(
+                e.from_agent == f"supplier:{s}" for e in rt.bus.inbox("buyer", types={T.OFFER, T.REJECT}, drain=False))]
+            if silent:  # an agent chases the supplier that has not answered, once, instead of a person doing it
+                await rt.buyer.send_all(T.FOLLOW_UP, [f"supplier:{s}" for s in silent], lambda _t: {"about": "RFQ", "attempt": 1})
+                again = await self._supplier_round(silent)
+                for s, rs in again.items():
+                    sub[s] = [*sub.get(s, []), *rs]
+                await self._audit("follow_up_sent", outcome="CHASED", evidence=[{"suppliers": sorted(silent)}])
             for e in self._buyer_inbox({T.OFFER, T.REJECT}):
                 sid = e.from_agent.split(":", 1)[1]
                 if e.type == T.OFFER:

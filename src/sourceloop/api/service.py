@@ -120,7 +120,7 @@ async def build_spec(name: str, need_index: int, seed: int) -> ScenarioSpec:
     return spec
 
 
-_BEHAVIOUR_PROFILES = {"aggressive": {"stubborn": True}, "unreliable": {"decline_rfq": True}}
+_BEHAVIOUR_PROFILES = {"aggressive": {"stubborn": True}, "unreliable": {"decline_rfq": True}, "slow": {"slow_reply": True}}
 
 
 def _profile_for(slot: str, behaviour: str) -> SupplierProfile | None:

@@ -7,7 +7,7 @@ from decimal import Decimal
 from typing import Annotated, Any, Literal
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from sourceloop.data.enums import MessageTypeEnum as T
 from sourceloop.data.enums import StageEnum as S
@@ -47,6 +47,33 @@ class InterestReply(Strict):
 
 class DocRequest(Strict):
     required_certificates: tuple[str, ...]
+
+
+RFI_FIELDS = ("capacity_units", "lead_time_weeks", "financial_risk", "years_in_business")  # the mandatory facts the qualification rules need
+
+
+class Rfi(Strict):
+    """Request for information: the buyer asks a supplier for facts the registry lacks. Field names only, from a closed list."""
+    fields: tuple[Literal["capacity_units", "lead_time_weeks", "financial_risk", "years_in_business"], ...] = Field(min_length=1, max_length=4)
+
+
+class RfiReply(Strict):
+    """The supplier's own declaration. Declared, not verified: it only fills a BLANK, never overrides the registry, and the rules still decide."""
+    values: dict[Literal["capacity_units", "lead_time_weeks", "financial_risk", "years_in_business"], float] = Field(max_length=4)
+
+    @model_validator(mode="after")
+    def _plausible(self) -> RfiReply:
+        lim = {"capacity_units": (1, 1e9), "lead_time_weeks": (0, 104), "financial_risk": (0, 1), "years_in_business": (0, 300)}
+        for k, v in self.values.items():
+            if not (lim[k][0] <= v <= lim[k][1]) or v != v:
+                raise ValueError(f"{k} out of range")
+        return self
+
+
+class FollowUp(Strict):
+    """A reminder: the supplier has not answered an earlier request. It carries no new information or terms."""
+    about: Literal["RFI", "RFQ"]
+    attempt: int = Field(ge=1, le=3)
 
 
 class CertClaim(Strict):
@@ -119,7 +146,7 @@ class Escalate(Strict):
 
 PAYLOADS: dict[T, type[Strict]] = {
     T.BRIEF: Brief, T.INVITE: Invite, T.INTEREST_REPLY: InterestReply, T.DOC_REQUEST: DocRequest,
-    T.DOC_SUBMISSION: DocSubmission, T.QUAL_RESULT: QualResult, T.RFQ: RFQ, T.OFFER: Offer,
+    T.DOC_SUBMISSION: DocSubmission, T.RFI: Rfi, T.RFI_REPLY: RfiReply, T.FOLLOW_UP: FollowUp, T.QUAL_RESULT: QualResult, T.RFQ: RFQ, T.OFFER: Offer,
     T.COUNTER: Counter, T.ACCEPT: Accept, T.REJECT: Reject, T.CONTRACT_DRAFT: ContractDraft,
     T.REDLINE: Redline, T.SIGN_REQUEST: SignRequest, T.ONBOARD_DATA: OnboardData, T.ESCALATE: Escalate,
 }
@@ -128,8 +155,8 @@ PAYLOADS: dict[T, type[Strict]] = {
 STAGE_TYPES: dict[S, frozenset[T]] = {
     S.NEED: frozenset({T.BRIEF, T.ESCALATE}),
     S.DISCOVERY: frozenset({T.INVITE, T.INTEREST_REPLY, T.ESCALATE}),
-    S.QUALIFICATION: frozenset({T.DOC_REQUEST, T.DOC_SUBMISSION, T.QUAL_RESULT, T.ESCALATE}),
-    S.SOURCING: frozenset({T.RFQ, T.OFFER, T.COUNTER, T.ACCEPT, T.REJECT, T.ESCALATE}),
+    S.QUALIFICATION: frozenset({T.DOC_REQUEST, T.DOC_SUBMISSION, T.RFI, T.RFI_REPLY, T.FOLLOW_UP, T.QUAL_RESULT, T.ESCALATE}),
+    S.SOURCING: frozenset({T.RFQ, T.FOLLOW_UP, T.OFFER, T.COUNTER, T.ACCEPT, T.REJECT, T.ESCALATE}),
     S.CONTRACTING: frozenset({T.CONTRACT_DRAFT, T.REDLINE, T.SIGN_REQUEST, T.ACCEPT, T.REJECT, T.ESCALATE}),
     S.ONBOARDING: frozenset({T.ONBOARD_DATA, T.ESCALATE}),
     S.DONE: frozenset(),

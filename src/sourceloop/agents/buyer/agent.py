@@ -75,8 +75,8 @@ class BuyerAgent:
         res = await par.gather(*[self.ch.send(type_, t, payload_of(t)) for t in targets])
         return dict(zip(targets, res, strict=True))
 
-    async def screen(self, need: K.NeedSpec, supplier_id: str):
-        return await self.tools.call(K.COMPLIANCE, K.ComplianceIn(need=need, supplier_id=supplier_id), guard=self._guard())
+    async def screen(self, need: K.NeedSpec, supplier_id: str, declared: tuple[tuple[str, float], ...] = ()):
+        return await self.tools.call(K.COMPLIANCE, K.ComplianceIn(need=need, supplier_id=supplier_id, declared=declared), guard=self._guard())
 
     async def region_risk(self, country: str, lead_weeks: int):
         g = self._guard()

@@ -218,6 +218,9 @@ def build_project(spec: ScenarioSpec, vis: Registry | None = None, full: Registr
         agent = SupplierAgent(sid, AgentChannel(f"supplier:{sid}", bus), tools, mandate.min_unit_price, spec.max_rounds,
                               prof, buyer_org="buyer-org", index_price=idx,
                               max_tool_calls=spec.supplier_tool_limits.get(sid, spec.supplier_max_tool_calls),
+                              facts={k: float(v) for k, v in (("capacity_units", rec.capacity_units), ("lead_time_weeks", rec.lead_time_weeks),
+                                                              ("financial_risk", rec.financial_risk), ("years_in_business", rec.years_in_business))
+                                     if v is not None},
                               **({"deliberator": deliberator} if deliberator is not None else {}))
         return SupplierRuntime(sid, rec.name, rec.country, agent, mandate)
 

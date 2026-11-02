@@ -23,6 +23,7 @@ class SupplierProfile:
     redline_locked_clause: str | None = None  # tries to alter e.g. "liability" (must reach Legal)
     inflate_claims: bool = False            # claims certificates it cannot prove (must be blocked)
     decline_rfq: bool = False
+    slow_reply: bool = False                # ignores the first RFQ; answers once the buyer follows up
     stubborn: bool = False                  # never concedes below opening
 
 
@@ -43,6 +44,9 @@ class SupplierAgent:
     max_tool_calls: int = 12                 # Studio agents.supplier_lead.max_tool_calls (per handled message)
     deliberator: Deliberator = field(default_factory=RuleDeliberator)
     last_pick: Pick | None = None
+    facts: dict[str, float] = field(default_factory=dict)  # this supplier's own figures, shared only when the buyer asks (RFI)
+    _rfq_seen: int = 0
+    _open_rfq: Envelope | None = None
 
     def _guard(self) -> TurnGuard:
         return TurnGuard(max_calls=self.max_tool_calls)
@@ -71,8 +75,16 @@ class SupplierAgent:
         return await self.channel.send(T.DOC_SUBMISSION, "buyer", {"certificates": [{"type": c, "claimed": True} for c in claims]},
                                        in_reply_to=env.id)
 
+    async def on_rfi(self, env: Envelope) -> SendResult:
+        """Answer a request for information with the figures this supplier can stand behind; a field it does not know is left out."""
+        return await self.channel.send(T.RFI_REPLY, "buyer", {"values": {k: self.facts[k] for k in env.payload["fields"] if k in self.facts}},
+                                       in_reply_to=env.id)
+
     # ---------- sourcing ----------
-    async def on_rfq(self, env: Envelope, buyer_org: str, index_price: Decimal | None) -> SendResult:
+    async def on_rfq(self, env: Envelope, buyer_org: str, index_price: Decimal | None) -> SendResult | None:
+        if self.profile.slow_reply and self._rfq_seen == 0:
+            self._rfq_seen = 1
+            return None  # no answer yet; the buyer's agent will follow up
         if self.profile.decline_rfq:
             return await self.channel.send(T.REJECT, "buyer", {"reason_code": "NOT_INTERESTED"}, in_reply_to=env.id)
         g = self._guard()
@@ -180,8 +192,17 @@ class SupplierAgent:
                 out.append(await self.on_invite(env))
             elif env.type == T.DOC_REQUEST:
                 out.append(await self.on_doc_request(env))
+            elif env.type == T.RFI:
+                out.append(await self.on_rfi(env))
+            elif env.type == T.FOLLOW_UP:
+                self._rfq_seen = 2  # reminded: answer the RFQ that is still open
+                if self._open_rfq is not None:
+                    out.append(await self.on_rfq(self._open_rfq, self.buyer_org, self.index_price))
             elif env.type == T.RFQ:
-                out.append(await self.on_rfq(env, self.buyer_org, self.index_price))
+                self._open_rfq = env
+                r = await self.on_rfq(env, self.buyer_org, self.index_price)
+                if r is not None:
+                    out.append(r)
             elif env.type == T.COUNTER:
                 out.append(await self.on_counter(env))
             elif env.type == T.CONTRACT_DRAFT:

@@ -173,6 +173,8 @@ class WorkflowCfg(_Section):
         help="Only NEED is honoured: L3+ auto-confirms the requirement (audited). Every other checkpoint is mandatory and human."))
     checkpoints: CheckpointCfg = Field(default_factory=CheckpointCfg)
     negotiation: NegotiationCfg = Field(default_factory=NegotiationCfg)
+    agent_rfi: bool = Field(False, json_schema_extra=W(
+        "switch", help="A supplier held back only by blank registry fields gets a request for information from the buyer agent; its declared figures fill the blanks and the same rules decide again."))
     longlist_size: int = Field(10, ge=1, le=50, json_schema_extra=W("number"))
     shortlist_size: int = Field(5, ge=1, le=20, json_schema_extra=W("number"))
     negotiate_top: int = Field(2, ge=1, le=10, json_schema_extra=W("number"))
@@ -277,7 +279,7 @@ class StudioConfig(_Section):
                          min_countries=w.min_countries, disabled_stages=frozenset(w.disabled_stages),
                          standard_clauses=tuple(w.standard_clauses), news_escalate_severity=w.news_escalate_severity,
                          news_min_confidence=w.news_min_confidence, config_version=config_version,
-                         confirm_requirement=w.checkpoints.requirement_confirmation, supplier_acceptance=w.checkpoints.supplier_acceptance,
+                         confirm_requirement=w.checkpoints.requirement_confirmation, supplier_acceptance=w.checkpoints.supplier_acceptance, agent_rfi=w.agent_rfi,
                          need_autonomy=int(w.autonomy.get(StageEnum.NEED, 1)), batched_async=w.checkpoints.batched_async,
                          judge_llm=w.negotiation.judge_llm, llm_moves=w.negotiation.llm_moves)
 

@@ -127,8 +127,12 @@ def build_buyer_tools(registry: Registry, llm: LLMClient, news: NewsFeed, projec
         s = enriched.get(inp.supplier_id) or registry.get(inp.supplier_id)
         if s is None:
             raise KeyError("unknown supplier")
+        filled = tuple(k for k, v in inp.declared if getattr(s, k, 1) is None)  # only blanks: a declaration never overrides the registry
+        if filled:
+            s = replace(s, **{k: (int(v) if k != "financial_risk" else v) for k, v in inp.declared if k in filled})
         d = qualify(s, to_need(inp.need), wl, today)
-        return ToolOutput[K.ComplianceOut](value=K.ComplianceOut(supplier_id=s.id, status=d.status.value, reasons=d.reasons))
+        reasons = d.reasons + ((f"DECLARED_BY_SUPPLIER:{','.join(filled)}",) if filled and d.status.value == "QUALIFIED" else ())
+        return ToolOutput[K.ComplianceOut](value=K.ComplianceOut(supplier_id=s.id, status=d.status.value, reasons=reasons))
 
     async def regional_news(inp: K.NewsIn) -> ToolOutput[K.NewsOut]:
         arts = await news.fetch(inp.country, inp.horizon_days)

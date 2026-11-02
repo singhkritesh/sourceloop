@@ -25,6 +25,12 @@ export function summarize(m: ProjectMessage, priceOf?: (offerId: string) => stri
       return { kv: [['Interested', p.interested ? 'yes' : 'no'], ['Capacity', String(p.capacity_units ?? '-')], ...(p.reason_code ? [['Reason', reasonText(String(p.reason_code))] as KV] : [])] };
     case 'DOC_REQUEST':
       return { kv: [['Certificates required', list(p.required_certificates)]] };
+    case 'RFI':
+      return { kv: [['Asked for', list((p.fields as string[] | undefined)?.map((f) => f.replace(/_/g, ' ')))]] };
+    case 'RFI_REPLY':
+      return { kv: Object.entries((p.values as Record<string, number> | undefined) ?? {}).map(([k, v]) => [k.replace(/_/g, ' '), String(v)] as KV).concat([['Status', 'declared by the supplier, not verified']]) };
+    case 'FOLLOW_UP':
+      return { kv: [['About', p.about === 'RFQ' ? 'the request for quote' : 'the request for information'], ['Reminder', String(p.attempt ?? 1)]] };
     case 'DOC_SUBMISSION':
       return { kv: [['Certificates claimed', list((p.certificates as Array<{ type: string }> | undefined)?.map((c) => c.type))]] };
     case 'QUAL_RESULT': {

@@ -84,9 +84,9 @@ def hexid(pid: str) -> str:
 # --------------------------------------------------------------------------------------------- export
 def phase_export() -> None:
     base = "http://127.0.0.1:8005/api/v1"
-    adm, ev, buyer, b2 = login(base, "admin"), login(base, "evaluator"), login(base, "buyer"), login(base, "buyer2")
+    adm, ev, buyer, b2 = login(base, "admin"), login(base, "buyeradmin"), login(base, "buyer"), login(base, "buyer2")
     sup = login(base, "supplier1")
-    pid = [p for p in buyer.get("/projects").json()["items"] if p["title"] == "E2E happy"][0]["id"]
+    pid = [p for p in buyer.get("/projects").json()["items"] if p["title"] == "determinism"][0]["id"]
     r = adm.get(f"/projects/{pid}/audit/export")
     lines = [json.loads(x) for x in r.text.splitlines() if x.strip()]
     ev_lines, trailer = [x for x in lines if x["type"] == "event"], lines[-1]
@@ -96,7 +96,7 @@ def phase_export() -> None:
     check("G export: trailer valid, events + head_hash equal /audit/verify", trailer["valid"] is True and trailer["events"] == len(ev_lines) == ver["events"] and trailer["head_hash"] == ver["head_hash"] == ev_lines[-1]["hash"], json.dumps(trailer)[:200])
     check("G export: offline linkage prev_hash == previous hash (genesis first)", all(ev_lines[i]["prev_hash"] == ev_lines[i - 1]["hash"] for i in range(1, len(ev_lines))) and ev_lines[0]["prev_hash"] not in (None, ev_lines[0]["hash"]))
     check("G export: anchor present and verified", trailer.get("anchor_verified") is True and trailer.get("anchor") is not None, json.dumps(trailer.get("anchor")))
-    check("G export: EVALUATOR allowed", ev.get(f"/projects/{pid}/audit/export").status_code == 200)
+    check("G export: the buyer organization admin (inspector for its own side) allowed", ev.get(f"/projects/{pid}/audit/export").status_code == 200)
     check("G export: BUYER 403, SUPPLIER 403", buyer.get(f"/projects/{pid}/audit/export").status_code == 403 and sup.get(f"/projects/{pid}/audit/export").status_code == 403)
     check("G export: nonexistent project 404", adm.get(f"/projects/{uuid.uuid4()}/audit/export").status_code == 404)
     check("G export: no secrets / key material in the export", not any(k in r.text.lower() for k in ("password", "jwt_secret", "vault", "api_key", "sk-e2e")))
@@ -185,21 +185,21 @@ def phase_auth() -> None:
     try:
         uni = lambda r: (r.status_code, json.dumps({k: v for k, v in r.json()["error"].items() if k != "request_id"}, sort_keys=True))  # noqa: E731
         A, B = "10.1.0.1", "10.1.0.2"
-        em = CREDS["designer"][0]
+        em = CREDS["supplier2"][0]
         bad = [uni(raw_login(base, em, f"wrong-{i}", A)) for i in range(5)]
         ghost = uni(raw_login(base, "nobody@sourceloop.test", "wrong", A))
         check("E auth: 5 wrong passwords from IP A -> identical uniform 401 (same as unknown email)", len(set(bad)) == 1 and bad[0][0] == 401 and ghost == bad[0], bad[0])
-        okA = raw_login(base, em, CREDS["designer"][1], A)
+        okA = raw_login(base, em, CREDS["supplier2"][1], A)
         check("E auth: (account, IP A) pair is locked: correct password from A is the same uniform 401", uni(okA) == bad[0], okA.status_code)
-        okB = raw_login(base, em, CREDS["designer"][1], B)
+        okB = raw_login(base, em, CREDS["supplier2"][1], B)
         check("E auth: SAME account from a different IP B still logs in (pair-scoped lock, no account-DoS)", okB.status_code == 200, okB.status_code)
         okC = raw_login(base, CREDS["buyer"][0], CREDS["buyer"][1], A)
         check("E auth: another account from the locked IP A still logs in", okC.status_code == 200, okC.status_code)
         # account-wide lock after many failures from MANY IPs
-        em2 = CREDS["evaluator"][0]
+        em2 = CREDS["supplier2admin"][0]
         for i in range(25):
             raw_login(base, em2, f"wrong-{i}", f"10.2.0.{i + 1}")
-        fresh = raw_login(base, em2, CREDS["evaluator"][1], "10.9.9.9")
+        fresh = raw_login(base, em2, CREDS["supplier2admin"][1], "10.9.9.9")
         check("E auth: 25 failures across many IPs lock the account itself; correct password from a fresh IP is the uniform 401", uni(fresh) == bad[0], fresh.status_code)
         # per-IP flood: 30 failures against distinct accounts from one IP -> that IP gets 429 + Retry-After; others unaffected
         flood_ip = "10.3.0.1"

@@ -200,6 +200,14 @@ async def start_project(pid: uuid.UUID, request: Request, p: Principal = Depends
     return {"id": str(pid), "status": "RUNNING"}
 
 
+@router.post("/{pid}/rerun", status_code=201)
+@limiter.shared_limit(start_limit, scope="run_start")
+async def rerun_project(pid: uuid.UUID, request: Request, p: Principal = Depends(require_role(R.BUYER)),
+                        db: AsyncSession = Depends(get_session)) -> dict:
+    proj = await svc(request).rerun(db, p, pid)
+    return {"id": str(proj.id), "status": "RUNNING"}
+
+
 def _buyer_side_only(p: Principal) -> None:
     if supplier_scoped(p):
         raise ApiError(403, "FORBIDDEN", "role not permitted")

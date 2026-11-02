@@ -341,7 +341,9 @@ class ConfigResolver:
             cfg = v.config()
         except ValidationError:
             raise LifecycleError("CONFIG_CORRUPT") from None
-        if content_hash(cfg) != v.content_hash:
+        # integrity is checked on the stored text itself, not on a re-dump of the parsed model: a Studio field added in a later release then loads
+        # with its default instead of turning every older published version into CONFIG_TAMPERED
+        if sha256_hex(v.payload_json) != v.content_hash:
             raise LifecycleError("CONFIG_TAMPERED")
         if (viol := check_invariants(cfg)):
             raise InvariantViolationError(sorted({x.invariant_id for x in viol}))

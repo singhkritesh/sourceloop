@@ -47,6 +47,8 @@ class Settings:
     max_baseline_runs: int = 2
     log_level: str = "INFO"
     audit_anchor_path: str = ""  # external append-only anchor file (empty = off). Compose / start.sh --local set it
+    reminder_after_hours: int = 24  # a decision nobody has answered gets a reminder in the mailbox after this long (up to 3, then it stops)
+    reminder_check_seconds: int = 900  # how often the reminder loop looks (0 = off)
     notify_webhook_url: str = ""  # chat webhook that is told when a decision is waiting (empty = off); the text carries no business data
     app_base_url: str = "http://localhost:3010"  # used in that message
     cookie_secure: bool | None = None  # None => dev: Secure unless the request host is localhost; prod: always true (config, not Host)
@@ -103,6 +105,8 @@ def load_settings(**overrides: object) -> Settings:
         log_level=e.get("LOG_LEVEL", "INFO").upper(),
         audit_anchor_path=e.get("AUDIT_ANCHOR_PATH", ""),
         demo_role_login=env != "prod" and e.get("DEMO_ROLE_LOGIN", "true").lower() == "true",
+        reminder_after_hours=int(e.get("REMINDER_AFTER_HOURS", "24")),
+        reminder_check_seconds=int(e.get("REMINDER_CHECK_SECONDS", "900")),
         notify_webhook_url=e.get("NOTIFY_WEBHOOK_URL", ""),
         app_base_url=e.get("APP_BASE_URL", "http://localhost:3010"),
         registration_enabled=e.get("REGISTRATION_ENABLED", "false" if env == "prod" else "true").lower() == "true",

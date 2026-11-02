@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { approvals } from '../api/endpoints';
+import { approvals, mailbox } from '../api/endpoints';
 import { can, useAuth } from '../state/auth';
 import { roleTitle } from '../lib/friendly';
 import { useUi } from '../state/ui';
@@ -22,6 +22,13 @@ export function Shell({ children }: { children: ReactNode }) {
     refetchInterval: 20_000,
     select: (d) => d.items.length,
   });
+  const unreadMail = useQuery({
+    queryKey: ['mailbox', 'count'],
+    queryFn: () => mailbox.list(),
+    enabled: can.resolveApprovals(role),
+    refetchInterval: 20_000,
+    select: (d) => d.unread.EMAIL + d.unread.SMS,
+  });
   return (
     <div className="shell">
       <header className="topbar">
@@ -32,6 +39,7 @@ export function Shell({ children }: { children: ReactNode }) {
             <NavLink to="/approvals">Approvals{!!pending.data && <Badge tone="warn">{pending.data}</Badge>}</NavLink>
           )}
           {can.resolveApprovals(role) && <NavLink to="/assistant">Chat</NavLink>}
+          {can.resolveApprovals(role) && <NavLink to="/mailbox">Mail{!!unreadMail.data && <Badge tone="warn">{unreadMail.data}</Badge>}</NavLink>}
           {can.seeOrganization(role) && <NavLink to="/organization">{role === 'ADMIN' ? 'Organization' : 'Organizations'}</NavLink>}
           {can.seeStudio(role) && <NavLink to="/studio">Studio</NavLink>}
           {can.seeSettings(role) && <NavLink to="/settings">Settings</NavLink>}

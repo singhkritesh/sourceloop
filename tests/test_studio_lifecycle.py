@@ -323,3 +323,16 @@ async def test_config_changes_flow_into_run():
     cfg = StudioConfig.model_validate(r)
     st = await run_to_completion(build_project(cfg.to_scenario_spec(), vis, full))
     assert len(st.shortlist) <= 3 and st.outcome is OutcomeEnum.DEAL
+
+
+async def test_a_version_published_before_a_new_studio_field_still_loads_with_the_default():
+    """An upgrade that adds a Studio field must not turn every older published version into CONFIG_TAMPERED."""
+    lc, store, _, _ = make()
+    v = await pub(lc)
+    old = json.loads(v.payload_json)
+    del old["workflow"]["follow_up_attempts"]   # what a release before the field stored
+    text = json.dumps(old, sort_keys=True, separators=(",", ":"))
+    import hashlib
+    store._versions[1] = v.model_copy(update={"payload_json": text, "content_hash": hashlib.sha256(text.encode()).hexdigest()})
+    cfg = await ConfigResolver(store).get(1)
+    assert cfg.workflow.follow_up_attempts == 1

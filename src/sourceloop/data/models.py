@@ -384,6 +384,24 @@ class Approval(Base):
                       UniqueConstraint("project_id", "core_id", name="uq_approval_project_core"))
 
 
+class Mailbox(Base):
+    """The in-app stand-in for email and text messages: what the platform would send a person, kept where that person can read and answer it.
+    Owned by an organization and a side (BUYER or SUPPLIER); the body never carries prices, limits or counterparty names."""
+    __tablename__ = "mailbox"
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    owner_org_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organization.id"), index=True)
+    owner_role: Mapped[str] = mapped_column(String(12))  # BUYER | SUPPLIER
+    channel: Mapped[str] = mapped_column(String(8))  # EMAIL | SMS
+    direction: Mapped[str] = mapped_column(String(4))  # IN (to the person) | OUT (the person's reply)
+    kind: Mapped[str] = mapped_column(String(20))  # DECISION | REMINDER | RFI | FOLLOW_UP | RFI_REPLY | LOST_RUN | REPLY | NOTE
+    subject: Mapped[str] = mapped_column(String(200), default="")
+    body: Mapped[str] = mapped_column(String(1000), default="")
+    project_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("project.id"), nullable=True, index=True)
+    approval_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("approval.id"), nullable=True, index=True)
+    read_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime)
+
+
 class Clause(Base):
     __tablename__ = "clause"
     key: Mapped[str] = mapped_column(String(60), primary_key=True)

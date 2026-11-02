@@ -37,6 +37,7 @@ export const projects = {
   start: (id: string) => http.post<{ id: string; status: string }>(`/projects/${id}/start`),
   resume: (id: string) => http.post<{ id: string; status: string }>(`/projects/${id}/resume`),
   stop: (id: string) => http.post<{ id: string; status: string }>(`/projects/${id}/stop`),
+  rerun: (id: string) => http.post<{ id: string; status: string }>(`/projects/${id}/rerun`),
   messages: (id: string, afterSeq = 0) =>
     http.get<{ items: ProjectMessage[] }>(`/projects/${id}/messages`, { query: { after_seq: afterSeq, limit: 500 } }),
   audit: (id: string, afterSeq = 0) =>
@@ -90,4 +91,14 @@ export const admin = {
   createOrg: (b: { name: string; kind: 'BUYER' | 'SUPPLIER'; admin_email: string }) =>
     http.post<{ org: { id: string; name: string; kind: string }; admin: OrgUser; initial_password: string }>('/admin/orgs', b),
   createStaff: (b: { email: string; role: Role }) => http.post<{ user: OrgUser; initial_password: string }>('/admin/staff', b),
+};
+
+export interface MailItem {
+  id: string; channel: 'EMAIL' | 'SMS'; direction: 'IN' | 'OUT'; kind: string; subject: string; body: string;
+  project_id: string | null; approval_id: string | null; read: boolean; open: boolean; created_at: string;
+}
+export const mailbox = {
+  list: (channel?: 'EMAIL' | 'SMS') => http.get<{ items: MailItem[]; unread: { EMAIL: number; SMS: number } }>('/mailbox', { query: { channel } }),
+  read: (id: string) => http.post<{ id: string; read: boolean }>(`/mailbox/${id}/read`),
+  reply: (id: string, text: string) => http.post<{ answer: string }>(`/mailbox/${id}/reply`, { text }),
 };

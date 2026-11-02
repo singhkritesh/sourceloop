@@ -33,6 +33,7 @@ async function supplierWatch(until) {
   }
 }
 let finished = false;
+let repliedByText = false;
 const NEED = 'We need 500 PCB assemblies certified IATF16949 and RoHS, delivered within 8 weeks. Please avoid suppliers in Turkey. Target price around 95 per unit.';
 try {
   await p.goto(BASE + '/login');
@@ -61,13 +62,23 @@ try {
     t = await text();
     if (/Deal reached/i.test(t) && !/Your decision is needed/i.test(t)) break;
     asked.push((t.match(/Your decision is needed: ([^\n]+)/i) ?? [])[1] ?? '?');
-    await p.goto(BASE + '/approvals'); await sleep(1500);
-    await p.evaluate(() => document.querySelector('button.appr')?.click()); await sleep(900);
-    await click('Approve'); await sleep(2500);
+    if (i === 0) {   // the first decision is answered the way a phone user would: by replying in the Texts window
+      await p.goto(BASE + '/mailbox'); await p.waitForFunction(() => /Mail and texts/.test(document.body.innerText), { timeout: 15000 });
+      await click('Texts'); await sleep(800);
+      await p.waitForSelector('input[aria-label="Your reply"]', { timeout: 15000 });
+      await p.type('input[aria-label="Your reply"]', 'APPROVE'); await p.keyboard.press('Enter');
+      repliedByText = await p.waitForFunction(() => /Done\. You approved it/.test(document.body.innerText), { timeout: 15000 }).then(() => true, () => false);
+      await shot('texts'); await sleep(1500);
+    } else {
+      await p.goto(BASE + '/approvals'); await sleep(1500);
+      await p.evaluate(() => document.querySelector('button.appr')?.click()); await sleep(900);
+      await click('Approve'); await sleep(2500);
+    }
     await p.goto(projectUrl); await sleep(2000);
   }
   finished = true; await watcher;
   await shot('deal');
+  check('a decision was answered by replying APPROVE in the Texts window', repliedByText);
   check('run reaches a deal', /Deal reached/i.test(await text()));
   check('the awarded supplier confirmed its own terms (its user, not the buyer)', supplierConfirmed.length === 1, supplierConfirmed.join(','));
   check('the buyer was asked at most 3 times, and only for real decisions', asked.length >= 1 && asked.length <= 3, asked.join(' | '));

@@ -76,3 +76,18 @@ async def test_a_silent_supplier_is_chased_once_and_still_quotes():
     follow = [e for e in rt.bus.log if e.type is T.FOLLOW_UP]
     assert [e.to_agent for e in follow] == [f"supplier:{sid}"] and "follow_up_sent" in await actions(rt)
     assert sid in st.offers   # the chase worked: it answered the RFQ
+
+
+async def test_a_supplier_that_ignores_twice_is_chased_twice_when_allowed_and_the_attempts_are_audited():
+    _, base = await run(ScenarioSpec(seed=42, need_index=0))
+    sid = base.shortlist[0]
+    spec = ScenarioSpec(seed=42, need_index=0)
+    spec.profiles = {sid: SupplierProfile(slow_reply=True, chases_needed=2)}
+    spec.run = dataclasses.replace(spec.run, follow_up_attempts=2)
+    rt, st = await run(spec)
+    assert len([e for e in rt.bus.log if e.type is T.FOLLOW_UP]) == 2 and sid in st.offers
+    attempts = [r.evidence[0]["attempt"] for r in await rt.audit.store.read(rt.project_id) if r.action == "follow_up_sent"]
+    assert attempts == [1, 2]
+    spec.run = dataclasses.replace(spec.run, follow_up_attempts=1)   # the default: one chase is not enough for this supplier
+    _, st1 = await run(spec)
+    assert sid not in st1.offers

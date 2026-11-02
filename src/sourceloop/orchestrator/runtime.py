@@ -72,6 +72,7 @@ class RunConfig:
     news_min_confidence: float = 0.6
     config_version: int = 1
     confirm_requirement: bool = False  # Studio workflow.checkpoints.requirement_confirmation (the only skippable checkpoint)
+    follow_up_attempts: int = 1  # Studio workflow.follow_up_attempts: how many times a silent RFQ supplier is chased (each attempt is audited)
     agent_rfi: bool = False  # Studio workflow.agent_rfi: the buyer agent asks suppliers with blank registry fields for them
     supplier_acceptance: bool = False  # Studio workflow.checkpoints.supplier_acceptance: the awarded supplier's user confirms the final terms
     supplier_users: frozenset[str] | None = None  # suppliers whose organization has a user account (None = not known); only those can be asked
@@ -434,12 +435,16 @@ class RunExecutor:
             sub = await self._supplier_round([s for s in todo if s not in st.dropped])
             silent = [s for s in todo if s not in st.dropped and not any(
                 e.from_agent == f"supplier:{s}" for e in rt.bus.inbox("buyer", types={T.OFFER, T.REJECT}, drain=False))]
-            if silent:  # an agent chases the supplier that has not answered, once, instead of a person doing it
-                await rt.buyer.send_all(T.FOLLOW_UP, [f"supplier:{s}" for s in silent], lambda _t: {"about": "RFQ", "attempt": 1})
+            for attempt in range(1, rt.cfg.follow_up_attempts + 1):  # an agent chases a supplier that has not answered, instead of a person doing it
+                if not silent:
+                    break
+                await rt.buyer.send_all(T.FOLLOW_UP, [f"supplier:{s}" for s in silent], lambda _t, n=attempt: {"about": "RFQ", "attempt": n})
                 again = await self._supplier_round(silent)
                 for s, rs in again.items():
                     sub[s] = [*sub.get(s, []), *rs]
-                await self._audit("follow_up_sent", outcome="CHASED", evidence=[{"suppliers": sorted(silent)}])
+                await self._audit("follow_up_sent", outcome="CHASED", evidence=[{"suppliers": sorted(silent), "attempt": attempt}])
+                silent = [s for s in silent if s not in st.dropped and not any(
+                    e.from_agent == f"supplier:{s}" for e in rt.bus.inbox("buyer", types={T.OFFER, T.REJECT}, drain=False))]
             for e in self._buyer_inbox({T.OFFER, T.REJECT}):
                 sid = e.from_agent.split(":", 1)[1]
                 if e.type == T.OFFER:

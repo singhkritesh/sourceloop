@@ -1,6 +1,7 @@
 """FastAPI app factory. Base path /api/v1."""
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 import uuid
@@ -22,6 +23,7 @@ from sourceloop.api.routers import (
     audit_export,
     auth,
     health,
+    mailbox,
     org,
     perspective,
     projects,
@@ -132,8 +134,10 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
     async def lifespan(app: FastAPI):  # noqa: ANN202
         await service.recover()
         await service.prune_revoked()
+        reminders = asyncio.create_task(service.reminder_loop(), name="reminders")
         await ensure_default_config(s, service.studio_lock)  # config v1 on first boot; projects pin versions (rule 15a)
         yield
+        reminders.cancel()
         await service.shutdown()
         if settings is not None:
             await dbm.dispose()
@@ -164,6 +168,7 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
     app.include_router(reviewers.router, prefix=API_PREFIX)
     app.include_router(perspective.router, prefix=API_PREFIX)
     app.include_router(org.router, prefix=API_PREFIX)
+    app.include_router(mailbox.router, prefix=API_PREFIX)
     return app
 
 

@@ -45,7 +45,7 @@ export function isLostOnRestart(p: { status: string; reason?: string | null }): 
 }
 
 export const LOST_ON_RESTART_TEXT =
-  'The server restarted and this run could not be rebuilt. Demo-mode (replay) runs are normally rebuilt automatically and carry on from where they stopped; this one could not be, because it was a live-AI run (those cannot be reproduced exactly) or its inputs changed since it started. The recorded history and audit trail are intact. Create a new project to run it again.';
+  'The server restarted and this run could not be rebuilt. Demo-mode (replay) runs are normally rebuilt automatically and carry on from where they stopped; this one could not be, because it was a live-AI run (those cannot be reproduced exactly) or its inputs changed since it started. The recorded history and audit trail are intact. Buyers can run it again from the same need with one click.';
 
 export function statusLabel(p: { status: string; reason?: string | null }): string {
   if (isLostOnRestart(p)) return 'lost on restart';

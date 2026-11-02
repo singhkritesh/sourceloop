@@ -28,6 +28,11 @@ export function ProjectHeader({ project, me, decisions, supplierView, inspect }:
     onSuccess: (_d, kind) => { toast.ok(kind === 'stop' ? 'Run stopped' : 'Run started'); void qc.invalidateQueries({ queryKey: ['project', project.id] }); void qc.invalidateQueries({ queryKey: ['overview', project.id] }); },
     onError: (e) => { if (isRuntimeUnavailable(e)) setRuntimeLost(true); toast.error(errorMessage(e)); },
   });
+  const again = useMutation({
+    mutationFn: () => projects.rerun(project.id),
+    onSuccess: (r) => { toast.ok('Started again from the same need'); nav(`/projects/${r.id}`); },
+    onError: (e) => toast.error(errorMessage(e)),
+  });
   // who is the run waiting on? (an overview lists every checkpoint of the project)
   const waitingOn = useMemo(() => (project.status !== 'ESCALATED' ? [] : decisions.filter((d) => d.status === 'PENDING').map((d) => ({ kind: d.kind, role: d.role }))), [project.status, decisions]);
   const canRun = !supplierView;
@@ -47,7 +52,8 @@ export function ProjectHeader({ project, me, decisions, supplierView, inspect }:
       {!supplierView && <Stepper stage={project.stage} status={project.status} />}
       {lost && (
         <div className="callout bad" role="alert"><Icon name="alert" />
-          <div><b>Lost on restart.</b> {LOST_ON_RESTART_TEXT} Resume and approval actions are disabled.</div></div>
+          <div><b>Lost on restart.</b> {LOST_ON_RESTART_TEXT} Resume and approval actions are disabled.
+            {role === 'BUYER' && !supplierView && <> <button className="btn primary sm" disabled={again.isPending} onClick={() => again.mutate()}><Icon name="refresh" />Run again from the same need</button></>}</div></div>
       )}
       {!lost && !supplierView && (
         <NextStepCard busy={act.isPending} onApprovals={() => nav('/approvals')} onStart={() => act.mutate('start')} onResume={() => act.mutate('resume')}

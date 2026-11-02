@@ -79,3 +79,7 @@ New port: **3010** (web dev / preview). Update the global port registry.
 * **Notifications while the page or app is open:** the "Notify me" button asks the browser for permission; new decisions then raise a notification.
 * **Push to a chat tool:** set `NOTIFY_WEBHOOK_URL` (Slack, Teams, ntfy ...) and `APP_BASE_URL`. Each new decision posts one line with a link to `/assistant`. The text names the decision only, never prices, suppliers or limits; the call goes through the egress guard and a failure never affects a run.
 * A supplier's user gets the same page for the one decision that is theirs (confirming the final terms).
+
+## Mail and texts (`/mailbox`)
+
+The in-app stand-in for email and SMS, for buyer users and supplier users. Two tabs: Email and Texts, with unread counts in the nav. A decision that is waiting arrives as an email and a text; reply **APPROVE**, or **DECLINE** and a reason (10+ characters), right in the window. It does exactly what the buttons do (same checks, same audit). Agent chasing shows up here too: a supplier sees a request for information or a follow-up, the buyer sees that a supplier answered. Reminders arrive after 24 hours without an answer (three at most). If the server restarted and lost a live run, the buyer finds a notice here and a **Run again from the same need** button on the project.

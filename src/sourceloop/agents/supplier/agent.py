@@ -24,6 +24,7 @@ class SupplierProfile:
     inflate_claims: bool = False            # claims certificates it cannot prove (must be blocked)
     decline_rfq: bool = False
     slow_reply: bool = False                # ignores the first RFQ; answers once the buyer follows up
+    chases_needed: int = 1                  # with slow_reply: how many follow-ups it takes before it answers
     stubborn: bool = False                  # never concedes below opening
 
 
@@ -46,6 +47,7 @@ class SupplierAgent:
     last_pick: Pick | None = None
     facts: dict[str, float] = field(default_factory=dict)  # this supplier's own figures, shared only when the buyer asks (RFI)
     _rfq_seen: int = 0
+    _chased: int = 0
     _open_rfq: Envelope | None = None
 
     def _guard(self) -> TurnGuard:
@@ -195,8 +197,10 @@ class SupplierAgent:
             elif env.type == T.RFI:
                 out.append(await self.on_rfi(env))
             elif env.type == T.FOLLOW_UP:
-                self._rfq_seen = 2  # reminded: answer the RFQ that is still open
-                if self._open_rfq is not None:
+                self._chased += 1
+                if self._chased >= self.profile.chases_needed:
+                    self._rfq_seen = 2  # reminded enough: answer the RFQ that is still open
+                if self._rfq_seen == 2 and self._open_rfq is not None:
                     out.append(await self.on_rfq(self._open_rfq, self.buyer_org, self.index_price))
             elif env.type == T.RFQ:
                 self._open_rfq = env

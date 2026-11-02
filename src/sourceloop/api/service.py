@@ -597,6 +597,8 @@ class ProjectService:
             if new:
                 await s.flush()
             for env in new:
+                await self._mail_message(s, now, h.pid, env)
+            for env in new:
                 if env.type in (T.OFFER, T.COUNTER):
                     sup_side = env.from_agent.startswith("supplier:")
                     sid = (env.from_agent if sup_side else env.to_agent).split(":", 1)[1]
@@ -617,6 +619,7 @@ class ProjectService:
                     added_approvals[a.id] = row.id
                     if a.status is AS.PENDING:
                         to_tell.append((a.kind.value, a.target_role.value))
+                        await self._mail_decision(s, now, h.pid, row, a)
                     if a.kind.value == "SUPPLIER_ACCEPT" and self.settings.demo_role_login and isinstance(a.evidence.get("supplier"), str):
                         await self._ensure_demo_supplier_user(s, a.evidence["supplier"])
                     if a.status is not AS.PENDING:
@@ -675,6 +678,80 @@ class ProjectService:
             from sourceloop.api.notify import notify_decision
             for kind, role in to_tell:
                 await notify_decision(self.settings.notify_webhook_url, self.settings.app_base_url, kind.replace('_', ' ').capitalize(), role)
+
+    async def _mail_decision(self, s: AsyncSession, now: Any, pid: uuid.UUID, row: Approval, a: Any) -> None:
+        """A decision is waiting: put an email and a text in the mailbox of the organization whose person has to answer it."""
+        from sourceloop.api import mailbox as mb
+        if a.target_role is RoleEnum.SUPPLIER:
+            sid = a.evidence.get("supplier")
+            org = (await s.execute(select(Supplier.org_id).where(Supplier.id == sid))).scalar_one_or_none() if isinstance(sid, str) else None
+            role = "SUPPLIER"
+        else:
+            org = (await s.execute(select(Project.buyer_org_id).where(Project.id == pid))).scalar_one_or_none()
+            role = "BUYER"
+        if org is not None:
+            await s.flush()
+            mb.post_decision(s, now, org=org, role=role, kind=a.kind.value, project=pid, approval=row.id, base_url=self.settings.app_base_url)
+
+    async def _mail_message(self, s: AsyncSession, now: Any, pid: uuid.UUID, env: Any) -> None:
+        """The agents' chasing shows up where a person would see it: a request for information or a follow-up lands in the supplier's mailbox, and
+        the supplier's answer in the buyer's. Only the closed field names travel, never a value."""
+        from sourceloop.api import mailbox as mb
+        if env.type in (T.RFI, T.FOLLOW_UP):
+            sid = env.to_agent.split(":", 1)[1]
+            org = (await s.execute(select(Supplier.org_id).where(Supplier.id == sid))).scalar_one_or_none()
+            if org is None:
+                return
+            if env.type is T.RFI:
+                fields = ", ".join(str(f).replace("_", " ") for f in env.payload.get("fields", []))
+                subject, body = "A buyer asks for more information", f"A buying organization asks you to supply: {fields}. Your agent answers from your own records."
+            else:
+                subject, body = "Reminder: a request for quote is waiting", f"A buying organization is still waiting for your quote (reminder {env.payload.get('attempt', 1)})."
+            mb.add(s, now, org=org, role="SUPPLIER", channel="EMAIL", kind=env.type.value, subject=subject, body=body, project=pid)
+        elif env.type is T.RFI_REPLY:
+            org = (await s.execute(select(Project.buyer_org_id).where(Project.id == pid))).scalar_one_or_none()
+            if org is not None:
+                mb.add(s, now, org=org, role="BUYER", channel="EMAIL", kind="RFI_REPLY", subject="A supplier answered the request for information",
+                       body="A supplier sent the figures you asked for. They are self-reported and marked as not verified.", project=pid)
+
+    async def reminder_loop(self) -> None:
+        """Wake every few minutes and nudge people whose decision has waited too long. Never raises; the run does not depend on it."""
+        if self.settings.reminder_check_seconds <= 0:
+            return
+        while True:
+            await asyncio.sleep(self.settings.reminder_check_seconds)
+            try:
+                await self.send_reminders()
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:  # noqa: BLE001
+                log.warning("reminders.failed", error=type(e).__name__)
+
+    async def send_reminders(self) -> int:
+        """One mailbox reminder (up to three) for every decision that has waited `reminder_after_hours`. Returns how many were sent."""
+        from sourceloop.api import mailbox as mb
+        now = self.clock.now()
+        async with dbm.session_scope() as s:
+            due = await mb.due_reminders(s, now, self.settings.reminder_after_hours)
+            for a, org, role, n in due:
+                mb.post_decision(s, now, org=org, role=role, kind=a.kind.value, project=a.project_id, approval=a.id,
+                                 base_url=self.settings.app_base_url, reminder=n)
+        return len(due)
+
+    async def rerun(self, db: AsyncSession, p: Principal, pid: uuid.UUID) -> Project:
+        """Run again a project the server lost on restart: a fresh project from the same typed need, started at once. The old one stays as it was."""
+        old = (await db.execute(select(Project).where(Project.id == pid, Project.buyer_org_id == p.org_id))).scalar_one_or_none()
+        if old is None:
+            raise ApiError(404, "NOT_FOUND", "project not found")
+        if old.reason != LOST_RUNTIME:
+            raise ApiError(409, "NOT_INTERRUPTED", "only a run that the server lost on restart can be run again")
+        b = old.brief if isinstance(old.brief, dict) else {}
+        new = await self.create_project(db, p, title=f"{old.title} (run again)"[:200], need_text=old.need_text, scenario=str(b.get("scenario") or "happy"),
+                                        need_index=b.get("need_index"), seed=int(b.get("seed") or 42))
+        nid = new.id
+        await db.rollback()
+        await self.start(nid)
+        return new
 
     async def _apply_resolution(self, s: AsyncSession, pid: uuid.UUID, ref: uuid.UUID | str, kind: Any, status: AS,
                                 resolver: str, comment: str, edit: dict[str, Any], new_version: int, now: Any, *,
@@ -1120,6 +1197,12 @@ class ProjectService:
                     status=PS.STOPPED, outcome=OutcomeEnum.FAILED, reason=LOST_RUNTIME, version=Project.version + 1,
                     updated_at=self.clock.now()))
                 await self._cancel_pending_approvals(s, pid, LOST_RUNTIME + ": server restarted")
+                from sourceloop.api import mailbox as mb
+                prj = await s.get(Project, pid)
+                if prj is not None:
+                    mb.add(s, self.clock.now(), org=prj.buyer_org_id, role="BUYER", channel="EMAIL", kind="LOST_RUN", project=pid,
+                           subject="A sourcing run was interrupted",
+                           body="The server restarted while this project was running and a live run cannot be rebuilt. Open it and choose Run again to start from the same need.")
             log.warning("run.lost_runtime", project=str(pid), why=why)
             n += 1
         self.last_recovery = {"restored": restored, "lost": n}

@@ -27,3 +27,6 @@ data/*.db-shm
 
 # local demo handout, not published
 docs/SourceLoop-business-summary.pdf
+
+# business deliverables (slides, Word document): local only
+deliverables/

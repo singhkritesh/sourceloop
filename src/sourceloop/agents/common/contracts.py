@@ -61,6 +61,7 @@ class ResearchOut(C):
 class ComplianceIn(C):
     need: NeedSpec
     supplier_id: str
+    declared: tuple[tuple[str, float], ...] = ()  # figures the supplier itself declared in answer to an RFI; they only fill blanks
 
 
 class ComplianceOut(C):

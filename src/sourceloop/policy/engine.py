@@ -169,6 +169,10 @@ def _check_supplier(t: T, p: Strict, m: SupplierMandate, ctx: PolicyContext) -> 
     elif t == T.REDLINE:
         assert isinstance(p, Redline)
         return _check_redline(p, set(m.unchangeable_clauses), ctx)
+    elif t == T.RFI_REPLY:  # a declaration may not promise more capacity or a faster lead time than the supplier's own mandate allows
+        v = p.values  # type: ignore[attr-defined]
+        if v.get("capacity_units", 0) > m.max_capacity_units or v.get("lead_time_weeks", 10**6) < m.lead_time_weeks:
+            return _block("DECLARATION_EXCEEDS_MANDATE")
     elif t == T.DOC_SUBMISSION:
         provable = set(m.provable_certificates)
         for c in p.certificates:  # type: ignore[attr-defined]

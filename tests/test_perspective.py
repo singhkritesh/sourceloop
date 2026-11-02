@@ -27,12 +27,16 @@ async def test_buyer_overview_tells_the_business_story_without_the_agent_workflo
         o = r.json()
         assert o["perspective"] == "buyer" and o["candidates"] and o["offers"] and o["award"] and o["contract"]["signed"] is True
         c = o["candidates"][0]
-        assert set(c) == {"supplier_id", "name", "country", "qualification", "reasons", "rounds", "latest_offer", "awarded"}
+        assert set(c) == {"supplier_id", "name", "country", "qualification", "reasons", "rounds", "latest_offer", "info", "awarded"}
         assert c["name"] and c["qualification"] in ("QUALIFIED", "REVIEW", "REJECTED", "BLOCKED", None)
         assert [m["stage"] for m in o["milestones"]][-1] in ("DONE", "ONBOARDING")
         text = json.dumps(o).lower()
         assert not [x for x in WORKFLOW_WORDS if x in text], (who, [x for x in WORKFLOW_WORDS if x in text])
         assert {d["kind"] for d in o["decisions"]} >= {"AWARD"}
+        n = o["negotiation"]   # the buyer sees its OWN limits and every step, never the supplier's floor or any supplier-side limit
+        assert n["limits"]["highest_unit_price"] and n["threads"] and all(t["steps"] for t in n["threads"])
+        assert {k for t in n["threads"] for st in t["steps"] for k in st} == {"round", "by", "unit_price", "lead_time_weeks", "move", "judge"}
+        assert "floor" not in json.dumps(n).lower() and [d["kind"] for d in n["when_a_person_decides"]][:2] == ["COMPLIANCE_FLAG", "AWARD"]
 
 
 async def test_business_users_are_refused_the_raw_agent_workflow_and_run_internals(w):  # noqa: F811

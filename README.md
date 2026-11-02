@@ -115,6 +115,8 @@ Results are discussed in `docs/evaluation.md`; the adversarial suite is describe
 cd web && npm test && npm run build    # vitest (39 tests) + tsc strict + vite build
 ```
 
+Phone-friendly decisions: the **Chat** page (`/assistant`) turns every waiting decision into a one-tap message, with optional browser notifications and a chat-webhook push (`NOTIFY_WEBHOOK_URL`); see `docs/ui.md`.
+
 Release check against the running Docker stack: `scripts/e2e-all.sh` (lint, import boundaries, backend and web tests, then the headless-Chrome journey `web/scripts/e2e-simple.mjs`: role picker, typed need, deal, the buyer's few decisions, the supplier's own confirmation, agent performance, help). It uses the local 4b model.
 
 `tests/test_live_ollama.py` runs only when a local Ollama with the model is reachable (otherwise skipped); the API live-path check is manual.

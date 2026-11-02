@@ -2,7 +2,9 @@ import { useMemo } from 'react';
 import type { BuyerOverview as Ov, Candidate, Project } from '../api/types';
 import { approvalTitle, qualText, reasonText, roleTitle, stageName } from '../lib/friendly';
 import { offersToMessages, priceText } from '../lib/offers';
+import { Negotiation } from './Negotiation';
 import { NegotiationReview } from './NegotiationReview';
+import { Readiness } from './Readiness';
 import { Ladder } from './Ladder';
 import { Badge, fmtTime } from './ui';
 
@@ -61,6 +63,7 @@ export function BuyerOverview({ project, data }: { project: Project; data: Ov })
   return (
     <div className="stack biz">
       <Need p={project} />
+      <Readiness list={data.candidates} />
       <Candidates list={data.candidates} />
       {data.offers.length > 0 && (
         <section className="card pad stack" aria-label="How prices moved">
@@ -68,6 +71,7 @@ export function BuyerOverview({ project, data }: { project: Project; data: Ov })
           <Ladder messages={msgs} names={names} />
         </section>
       )}
+      <Negotiation data={data.negotiation} />
       <NegotiationReview turns={data.negotiation_review} names={names} />
       {(data.award || data.contract) && (
         <section className="card pad stack" aria-label="Outcome">

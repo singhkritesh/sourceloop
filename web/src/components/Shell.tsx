@@ -31,6 +31,7 @@ export function Shell({ children }: { children: ReactNode }) {
           {can.seeApprovals(role) && !(role === 'ADMIN' && me?.org.kind === 'SUPPLIER') && (
             <NavLink to="/approvals">Approvals{!!pending.data && <Badge tone="warn">{pending.data}</Badge>}</NavLink>
           )}
+          {can.resolveApprovals(role) && <NavLink to="/assistant">Chat</NavLink>}
           {can.seeOrganization(role) && <NavLink to="/organization">{role === 'ADMIN' ? 'Organization' : 'Organizations'}</NavLink>}
           {can.seeStudio(role) && <NavLink to="/studio">Studio</NavLink>}
           {can.seeSettings(role) && <NavLink to="/settings">Settings</NavLink>}

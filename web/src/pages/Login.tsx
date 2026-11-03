@@ -2,17 +2,15 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { auth, type DemoAccount } from '../api/endpoints';
-import { roleTitle } from '../lib/friendly';
 import { ApiError } from '../api/http';
 import { Icon } from '../components/Icon';
 import { useAuth } from '../state/auth';
 
 const ROLE_HINT: Record<string, string> = {
-  BUYER: 'Describes the need and makes every buyer-side decision', SUPPLIER: 'Receives requests and quotes through its own agent',
-  SUPER_ADMIN: 'Platform operator: sets platform rules and mediates, sees everything', ADMIN: 'Manages this organization and its agent settings; never approves',
+  BUYER: 'Describes the need and makes every buyer-side decision.', SUPPLIER: 'Receives requests and quotes through its own agent.',
+  SUPER_ADMIN: 'Platform operator: sets rules, mediates, sees everything.', ADMIN: 'Manages one organization and its agent settings; never approves.',
 };
 const ORDER = ['BUYER', 'SUPPLIER', 'SUPER_ADMIN', 'ADMIN'];
-const ROLE_NAME: Record<string, string> = { SUPER_ADMIN: 'SBN admin', ADMIN: 'Organization admin' };
 
 export function Login() {
   const setMe = useAuth((s) => s.setMe);
@@ -25,6 +23,7 @@ export function Login() {
   const [lockSecs, setLockSecs] = useState(0);
   const roles = useQuery({ queryKey: ['demo-roles'], queryFn: auth.demoRoles, retry: false });
   const [usePassword, setUsePassword] = useState(false);
+  const [pickedFor, setPickedFor] = useState<Record<string, string>>({});
   const picker = !!roles.data?.enabled && !usePassword;
 
   async function pick(a: DemoAccount) {
@@ -79,30 +78,65 @@ export function Login() {
   const mm = String(Math.floor(lockSecs / 60)).padStart(1, '0');
   const ss = String(lockSecs % 60).padStart(2, '0');
   if (picker) {
-    const list = (roles.data?.accounts ?? []).filter((a) => ORDER.includes(a.role)).sort((x, y) => ORDER.indexOf(x.role) - ORDER.indexOf(y.role) || x.email.localeCompare(y.email));
+    const all = (roles.data?.accounts ?? []).filter((a) => ORDER.includes(a.role));
+    // accounts the test bed creates on the fly for a supplier that is asked to confirm terms are not offered while the standing ones exist
+    const standing = all.filter((a) => !/^supplier-s\d+@/.test(a.email));
+    const accounts = standing.length ? standing : all;
+    const kinds: { key: string; role: string; orgKind?: string; title: string; ico: string; cls: string }[] = [
+      { key: 'buyer', role: 'BUYER', title: 'Buyer', ico: 'B', cls: 'buyer' },
+      { key: 'supplier', role: 'SUPPLIER', title: 'Supplier', ico: 'S', cls: 'supplier' },
+      { key: 'admin', role: 'ADMIN', title: 'Organization admin', ico: 'A', cls: 'admin' },
+      { key: 'sbn', role: 'SUPER_ADMIN', title: 'SBN admin', ico: 'N', cls: 'sbn' },
+    ];
     return (
       <div className="login-wrap">
-        <div className="card login-card stack" style={{ maxWidth: 560 }}>
+        <aside className="login-story">
           <div className="brand"><Icon name="logo" /><span>SourceLoop</span></div>
-          <div><h1 id="login-h">Choose a role to continue</h1><p className="muted">Demo environment with made-up data. No password needed: pick who you want to be.</p></div>
-          {error && <div className="callout bad" role="alert"><Icon name="alert" /><div>{error}</div></div>}
-          <div className="stack" role="list" style={{ gap: 8 }}>
-            {list.map((a) => (
-              <button key={a.email} role="listitem" className="btn" style={{ justifyContent: 'flex-start', height: 'auto', padding: '10px 12px', textAlign: 'left' }}
-                disabled={busy} onClick={() => void pick(a)}>
-                <span><b>{ROLE_NAME[a.role] ?? roleTitle(a.role)}</b><span className="muted"> · {a.org}</span>
-                  <span className="muted" style={{ display: 'block', fontWeight: 400 }}>{ROLE_HINT[a.role] ?? ''}</span></span>
-              </button>
-            ))}
+          <div>
+            <h2>Sourcing that runs itself, and asks you only when it matters.</h2>
+            <p>A buyer agent and a supplier agent find, qualify and negotiate. Limits live in code, the audit trail is tamper-evident, and you decide only what truly needs a person.</p>
           </div>
-          <button className="btn ghost" type="button" onClick={() => setUsePassword(true)}>Sign in with a password instead</button>
-        </div>
+          <ul className="login-points">
+            <li><span className="dot">1</span><div><b>Find and qualify</b><span>Suppliers sorted into ready, missing information or not eligible.</span></div></li>
+            <li><span className="dot">2</span><div><b>Negotiate within limits</b><span>Offers and counteroffers, each checked against a mandate neither side can see.</span></div></li>
+            <li><span className="dot">3</span><div><b>Decide from anywhere</b><span>Approve from chat, mail or text, on your phone.</span></div></li>
+          </ul>
+        </aside>
+        <main className="login-main">
+          <div className="login-panel">
+            <div><h1 id="login-h">Choose a role to continue</h1><p className="muted">Demo environment with made-up data. No password needed: pick who you want to be.</p></div>
+            {error && <div className="callout bad" role="alert"><Icon name="alert" /><div>{error}</div></div>}
+            <div className="kind-grid">
+              {kinds.map((k) => {
+                const list = accounts.filter((a) => a.role === k.role).sort((x, y) => x.org.localeCompare(y.org));
+                if (!list.length) return null;
+                const chosen = list.find((a) => a.email === pickedFor[k.key]) ?? list[0]!;
+                return (
+                  <div key={k.key} className={`kind ${k.cls}`}>
+                    <button type="button" className="kind-btn" disabled={busy} onClick={() => void pick(chosen)}>
+                      <span className="ico" data-l={k.ico} aria-hidden="true" />
+                      <b>{k.title}</b>
+                      <span className="d">{ROLE_HINT[k.role] ?? ''}</span>
+                    </button>
+                    {list.length > 1
+                      ? <select className="select" aria-label={`Company for ${k.title}`} value={chosen.email} onChange={(e) => setPickedFor((m) => ({ ...m, [k.key]: e.target.value }))}>
+                          {list.map((a) => <option key={a.email} value={a.email}>{a.org}</option>)}</select>
+                      : <span className="org-one">{chosen.org}</span>}
+                  </div>
+                );
+              })}
+            </div>
+            <button className="btn ghost" type="button" onClick={() => setUsePassword(true)}>Sign in with a password instead</button>
+          </div>
+        </main>
       </div>
     );
   }
   return (
     <div className="login-wrap">
-      <form className="card login-card stack" onSubmit={(e) => void submit(e)} aria-labelledby="login-h">
+      <aside className="login-story"><div className="brand"><Icon name="logo" /><span>SourceLoop</span></div>
+        <div><h2>Sourcing that runs itself, and asks you only when it matters.</h2><p>Agentic sourcing, with limits enforced in code.</p></div><span /></aside>
+      <main className="login-main"><form className="card login-card stack" style={{ width: 'min(420px, 100%)' }} onSubmit={(e) => void submit(e)} aria-labelledby="login-h">
         <div className="brand"><Icon name="logo" /><span>SourceLoop</span></div>
         <div><h1 id="login-h">Sign in</h1><p className="muted">Agentic sourcing, with limits enforced in code.</p></div>
         {error && (
@@ -118,7 +152,7 @@ export function Login() {
         <button className="btn primary" style={{ height: 38 }} disabled={busy || lockSecs > 0 || !email || !password}>
           {busy ? 'Signing in…' : lockSecs > 0 ? `Locked (${lockSecs}s)` : 'Sign in'}
         </button>
-      </form>
+      </form></main>
     </div>
   );
 }

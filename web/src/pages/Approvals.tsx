@@ -57,7 +57,7 @@ export function Approvals() {
           <div className="inbox">
             {rows.map((a, i) => (
               <button key={a.id} className={`appr ${i === cursor ? 'sel' : ''}`} onClick={() => { setCursor(i); setOpenId(a.id); }}>
-                <Badge tone={tone(a.status)}>{a.status.toLowerCase()}</Badge>{a.overdue && <Badge tone="bad">OVERDUE</Badge>}
+                <span className="appr-tags"><Badge tone={tone(a.status)}>{a.status.toLowerCase()}</Badge>{a.overdue && <Badge tone="bad">OVERDUE</Badge>}</span>
                 <div style={{ minWidth: 0 }}>
                   <b className="appr-title">{approvalTitle(a.kind)}</b> <span className="muted">· {stageName(a.stage).toLowerCase()} stage · for {roleLabel(a.target_role)}</span>
                   <div className="muted trunc">{a.reasons.map(reasonText).join('; ') || 'Routine checkpoint'}</div>

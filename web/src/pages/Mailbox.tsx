@@ -38,9 +38,10 @@ export function Mailbox() {
       {!incoming.length && <Empty title={channel === 'EMAIL' ? 'No email yet' : 'No texts yet'}>Messages appear here when a decision is waiting for you.</Empty>}
       <div className={channel === 'SMS' ? 'chat-thread' : 'stack'}>
         {incoming.map((m) => (
-          <div key={m.id} className={channel === 'SMS' ? 'chat-bubble' : 'card'} style={{ padding: 14, borderLeft: m.read ? undefined : '3px solid var(--accent)' }} onMouseEnter={() => { if (!m.read) seen.mutate(m.id); }}>
-            <div className="muted" style={{ fontSize: 12 }}>{KIND[m.kind] ?? m.kind} · {fmtTime(m.created_at)}</div>
-            {m.subject && <b>{m.subject}</b>}
+          <div key={m.id} className={`${channel === 'SMS' ? 'chat-bubble' : 'card mail'} ${m.read ? '' : 'unread'}`} onMouseEnter={() => { if (!m.read) seen.mutate(m.id); }}>
+            <div className="mail-meta"><span className="mail-from">{channel === 'SMS' ? 'SourceLoop text' : 'SourceLoop'}</span>
+              <span className="mail-kind">{KIND[m.kind] ?? m.kind}</span><span className="spacer" /><span className="muted">{fmtTime(m.created_at)}</span></div>
+            {m.subject && <b className="mail-subject">{m.subject}</b>}
             <p style={{ whiteSpace: 'pre-wrap', margin: '4px 0' }}>{m.body}</p>
             {m.project_id && <Link to={`/projects/${m.project_id}`}>Open the project</Link>}
             {thread(m).map((x) => (

@@ -450,3 +450,16 @@ h4 { font-size: 11.5px; letter-spacing: .08em; }
 }
 .shell { grid-template-columns: minmax(0, 1fr); }
 .card.mail.unread .mail-meta { padding-left: 12px; }
+
+/* phone: the agent table becomes one block per agent so no column (the model) hides off to the side */
+@media (max-width: 640px) {
+  .card .table.agents-table { min-width: 0; }
+  .agents-table thead { display: none; }
+  .agents-table tr { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; padding: 12px 14px; border-bottom: 1px solid var(--border); }
+  .agents-table td { display: block; padding: 0; border: 0; }
+  .agents-table td:first-child { grid-column: 1 / -1; }
+  .agents-table td:last-child { grid-column: 1 / -1; }
+  .agents-table td[data-label]::before { content: attr(data-label); display: block; font-size: 11px; color: var(--text-3); margin-bottom: 3px; }
+  .agents-table td .select, .agents-table td .input { width: 100% !important; }
+  .page-head > :first-child { flex: 1 1 100%; }
+}

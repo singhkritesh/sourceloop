@@ -151,7 +151,7 @@ function AgentSettings({ orgId, editable }: { orgId?: string; editable: boolean 
       <div className="callout info"><span aria-hidden="true">i</span><div>These settings apply to <b>your side only</b> and sit on top of the platform configuration that SBN publishes (version {v.platform_version}). You can tune timeouts, tool-call limits, the model{v.kind === 'BUYER' ? ' and prompt wording' : ''} of your agents. Safety rules, checkpoints, contract clauses and the audit trail are not configurable here. Each save is a new version; projects keep the version they started with.</div></div>
       <section className="card">
         <div className="card-head"><h2>Your agents</h2>{v.active_version ? <Badge tone="accent">your version {v.active_version}</Badge> : <Badge>platform defaults</Badge>}</div>
-        <table className="table">
+        <table className="table agents-table">
           <thead><tr><th>Agent</th><th>Timeout (s)</th><th>Max tool calls</th><th>Model</th></tr></thead>
           <tbody>
             {Object.entries(v.editable.agents).map(([k, a]) => {
@@ -159,9 +159,9 @@ function AgentSettings({ orgId, editable }: { orgId?: string; editable: boolean 
               return (
                 <tr key={k}>
                   <td><b>{toolText(k)}</b>{a.lead && <div className="hint">lead agent</div>}</td>
-                  <td><input className="input" style={{ width: 90 }} type="number" min={1} max={120} aria-label={`${toolText(k)} timeout`} disabled={!editable} placeholder={String(a.timeout_s)} value={d.timeout ?? ''} onChange={(e) => setAgent(k, { timeout: e.target.value })} /></td>
-                  <td>{a.lead ? <input className="input" style={{ width: 90 }} type="number" min={1} max={50} aria-label={`${toolText(k)} max tool calls`} disabled={!editable} placeholder={String(a.max_tool_calls)} value={d.calls ?? ''} onChange={(e) => setAgent(k, { calls: e.target.value })} /> : <span className="muted">-</span>}</td>
-                  <td><select className="select" style={{ width: 230 }} aria-label={`${toolText(k)} model`} disabled={!editable} value={d.model ?? ''} onChange={(e) => setAgent(k, { model: e.target.value || undefined })}>
+                  <td data-label="Timeout (s)"><input className="input" style={{ width: 90 }} type="number" min={1} max={120} aria-label={`${toolText(k)} timeout`} disabled={!editable} placeholder={String(a.timeout_s)} value={d.timeout ?? ''} onChange={(e) => setAgent(k, { timeout: e.target.value })} /></td>
+                  <td data-label="Max tool calls">{a.lead ? <input className="input" style={{ width: 90 }} type="number" min={1} max={50} aria-label={`${toolText(k)} max tool calls`} disabled={!editable} placeholder={String(a.max_tool_calls)} value={d.calls ?? ''} onChange={(e) => setAgent(k, { calls: e.target.value })} /> : <span className="muted">-</span>}</td>
+                  <td data-label="Model"><select className="select" style={{ width: 230 }} aria-label={`${toolText(k)} model`} disabled={!editable} value={d.model ?? ''} onChange={(e) => setAgent(k, { model: e.target.value || undefined })}>
                     <option value="">platform default</option>{v.editable.models.map((m) => <option key={m} value={m}>{m}</option>)}</select></td>
                 </tr>
               );

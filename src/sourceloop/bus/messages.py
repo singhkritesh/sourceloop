@@ -76,6 +76,26 @@ class FollowUp(Strict):
     attempt: int = Field(ge=1, le=3)
 
 
+LEVERAGE_SIGNALS = ("OTHER_OFFERS", "PRICE_BELOW", "FASTER_DELIVERY", "MORE_RELIABLE", "PAID_LESS_BEFORE")
+LEVERAGE_BANDS = ("UP_TO_5", "5_TO_10", "10_TO_20", "OVER_20")
+
+
+class Leverage(Strict):
+    """What the buyer's agent may say about competing offers: closed signals and a rounded band, never a name, an exact price or any terms.
+    The orchestrator builds it from the real offers and checks it before delivery, so it cannot be a bluff."""
+    signals: tuple[Literal["OTHER_OFFERS", "PRICE_BELOW", "FASTER_DELIVERY", "MORE_RELIABLE", "PAID_LESS_BEFORE"], ...] = Field(min_length=1, max_length=5)
+    price_gap_band: Literal["UP_TO_5", "5_TO_10", "10_TO_20", "OVER_20"] | None = None
+    based_on: int = Field(ge=0, le=50)
+
+    @model_validator(mode="after")
+    def _band_only_with_price(self) -> Leverage:
+        if (self.price_gap_band is not None) != ("PRICE_BELOW" in self.signals):
+            raise ValueError("a price band goes with PRICE_BELOW and only with it")
+        if len(set(self.signals)) != len(self.signals):
+            raise ValueError("signals repeat")
+        return self
+
+
 class CertClaim(Strict):
     type: str
     claimed: bool = True
@@ -146,7 +166,7 @@ class Escalate(Strict):
 
 PAYLOADS: dict[T, type[Strict]] = {
     T.BRIEF: Brief, T.INVITE: Invite, T.INTEREST_REPLY: InterestReply, T.DOC_REQUEST: DocRequest,
-    T.DOC_SUBMISSION: DocSubmission, T.RFI: Rfi, T.RFI_REPLY: RfiReply, T.FOLLOW_UP: FollowUp, T.QUAL_RESULT: QualResult, T.RFQ: RFQ, T.OFFER: Offer,
+    T.DOC_SUBMISSION: DocSubmission, T.RFI: Rfi, T.RFI_REPLY: RfiReply, T.FOLLOW_UP: FollowUp, T.LEVERAGE: Leverage, T.QUAL_RESULT: QualResult, T.RFQ: RFQ, T.OFFER: Offer,
     T.COUNTER: Counter, T.ACCEPT: Accept, T.REJECT: Reject, T.CONTRACT_DRAFT: ContractDraft,
     T.REDLINE: Redline, T.SIGN_REQUEST: SignRequest, T.ONBOARD_DATA: OnboardData, T.ESCALATE: Escalate,
 }
@@ -156,7 +176,7 @@ STAGE_TYPES: dict[S, frozenset[T]] = {
     S.NEED: frozenset({T.BRIEF, T.ESCALATE}),
     S.DISCOVERY: frozenset({T.INVITE, T.INTEREST_REPLY, T.ESCALATE}),
     S.QUALIFICATION: frozenset({T.DOC_REQUEST, T.DOC_SUBMISSION, T.RFI, T.RFI_REPLY, T.FOLLOW_UP, T.QUAL_RESULT, T.ESCALATE}),
-    S.SOURCING: frozenset({T.RFQ, T.FOLLOW_UP, T.OFFER, T.COUNTER, T.ACCEPT, T.REJECT, T.ESCALATE}),
+    S.SOURCING: frozenset({T.RFQ, T.FOLLOW_UP, T.LEVERAGE, T.OFFER, T.COUNTER, T.ACCEPT, T.REJECT, T.ESCALATE}),
     S.CONTRACTING: frozenset({T.CONTRACT_DRAFT, T.REDLINE, T.SIGN_REQUEST, T.ACCEPT, T.REJECT, T.ESCALATE}),
     S.ONBOARDING: frozenset({T.ONBOARD_DATA, T.ESCALATE}),
     S.DONE: frozenset(),

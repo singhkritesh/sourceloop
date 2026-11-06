@@ -49,6 +49,7 @@ class SupplierAgent:
     _rfq_seen: int = 0
     _chased: int = 0
     _open_rfq: Envelope | None = None
+    pressure: dict = field(default_factory=dict)  # what the buyer said about competing offers (closed signals and a rounded band), if anything
 
     def _guard(self) -> TurnGuard:
         return TurnGuard(max_calls=self.max_tool_calls)
@@ -144,9 +145,25 @@ class SupplierAgent:
             for lab, pr, txt in (("COUNTER_FIRM", firm, "a firm counter that gives up little"), ("COUNTER_GENEROUS", generous, "a counter that moves further towards the buyer")):
                 if self.unit_floor <= pr < last:
                     add(Move(lab, "counter", pr, f"Counter at {pr}: {txt}."))
+        if self._strong_pressure() and out[0].kind == "counter":  # a clear price gap against a rival moves the planned counter towards the buyer, never below the floor
+            gen = next((m for m in out if m.label == "COUNTER_GENEROUS"), None)
+            if gen is not None:
+                out.remove(gen)
+                out.insert(0, gen)
         if out[0].kind != "walk":
             add(Move("WALK", "walk", None, "End the negotiation without a deal."))
         return out
+
+    def _strong_pressure(self) -> bool:
+        return "PRICE_BELOW" in self.pressure.get("signals", ()) and self.pressure.get("band") in ("5_TO_10", "10_TO_20", "OVER_20")
+
+    def _pressure_line(self) -> tuple[str, ...]:
+        s = self.pressure.get("signals", ())
+        if not s:
+            return ()
+        said = {"OTHER_OFFERS": "other qualified offers exist", "PRICE_BELOW": "at least one is priced below yours", "FASTER_DELIVERY": "one promises faster delivery",
+                "MORE_RELIABLE": "one has a better delivery record", "PAID_LESS_BEFORE": "the buyer has paid less for this before"}
+        return ("The buyer has told you: " + "; ".join(said[x] for x in s if x in said) + ". Weigh this, but never go below your floor.",)
 
     async def on_counter(self, env: Envelope) -> SendResult:
         rnd = int(env.payload["round"])
@@ -155,7 +172,8 @@ class SupplierAgent:
         moves = self._counter_moves(buyer_price, rnd)
         situation = (f"You are the supplier. Round {rnd} of {self.max_rounds}.",
                      f"The buyer's counter is {buyer_price}; your own previous price was {last}; your floor is {self.unit_floor}.",
-                     f"The buyer's counter is {((buyer_price - self.unit_floor) / self.unit_floor * 100).quantize(Decimal('0.1'))}% above your floor.")
+                     f"The buyer's counter is {((buyer_price - self.unit_floor) / self.unit_floor * 100).quantize(Decimal('0.1'))}% above your floor.",
+                     *self._pressure_line())
         pick = await self.deliberator.pick(f"supplier:{self.supplier_id}", self.supplier_id, rnd, situation, moves)
         self.last_pick = pick
         m = moves[pick.index]
@@ -207,6 +225,8 @@ class SupplierAgent:
                 r = await self.on_rfq(env, self.buyer_org, self.index_price)
                 if r is not None:
                     out.append(r)
+            elif env.type == T.LEVERAGE:
+                self.pressure = {"signals": tuple(env.payload["signals"]), "band": env.payload.get("price_gap_band")}
             elif env.type == T.COUNTER:
                 out.append(await self.on_counter(env))
             elif env.type == T.CONTRACT_DRAFT:

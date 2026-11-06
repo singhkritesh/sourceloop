@@ -50,6 +50,7 @@ class MessageTypeEnum(StrEnum):
     RFI = "RFI"
     RFI_REPLY = "RFI_REPLY"
     FOLLOW_UP = "FOLLOW_UP"
+    LEVERAGE = "LEVERAGE"
     QUAL_RESULT = "QUAL_RESULT"
     RFQ = "RFQ"
     OFFER = "OFFER"

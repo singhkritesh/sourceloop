@@ -55,6 +55,7 @@ from sourceloop.data.models import (
     LedgerHold,
     Mandate,
     Message,
+    NegotiationMemory,
     Offer,
     Organization,
     OrgOverride,
@@ -279,6 +280,8 @@ class ProjectService:
             spec.run = dataclasses.replace(spec.run, supplier_users=frozenset((await db.execute(with_users)).scalars()))
         if spec.run.use_saved_profile:
             await self._saved_profiles(db, spec, cfg.workflow.saved_profile_max_age_days)
+        if spec.run.leverage:
+            await self._buyer_history(db, spec, buyer_org_id)
         release: list[Any] = []
         if mode == "live":
             await self._live_llm(db, cfg, spec, release)
@@ -432,6 +435,44 @@ class ProjectService:
                 models = {m.model for m in cfg.llm.roles.values() if m.provider == name}
                 models |= {a.model_override.model for a in cfg.agents.values() if a.model_override and a.model_override.provider == name}
                 release.extend(functools.partial(prov.release, m) for m in sorted(models))
+
+    async def _buyer_history(self, db: AsyncSession, spec: ScenarioSpec, buyer_org_id: uuid.UUID) -> None:
+        """What this buyer organization paid each supplier before, per category (its own memory, deals only): the lowest final price."""
+        rows = (await db.execute(select(NegotiationMemory.category, NegotiationMemory.counterparty, func.min(NegotiationMemory.final_price))
+                                 .where(NegotiationMemory.owner_org_id == buyer_org_id, NegotiationMemory.owner_side == "BUYER", NegotiationMemory.outcome == "DEAL")
+                                 .group_by(NegotiationMemory.category, NegotiationMemory.counterparty))).all()
+        hist: dict[str, dict[str, str]] = {}
+        for cat, sid, price in rows:
+            hist.setdefault(cat, {})[sid] = str(price)
+        spec.run = dataclasses.replace(spec.run, history_best=hist)
+
+    async def _remember(self, h: RunHandle) -> None:
+        """When a negotiation has ended, each organization's agent keeps what it came to (its own side only). Once per project; never raises."""
+        st = h.rt.state
+        if st.status not in TERMINAL or st.outcome is None:
+            return
+        try:
+            async with dbm.session_scope() as s:
+                proj = await s.get(Project, h.pid)
+                if proj is None or (await s.execute(select(NegotiationMemory.id).where(NegotiationMemory.project_id == h.pid).limit(1))).first():
+                    return
+                offers = list((await s.execute(select(Offer).where(Offer.project_id == h.pid).order_by(Offer.round, Offer.side))).scalars())
+                sups = {x.id: x for x in (await s.execute(select(Supplier).where(Supplier.id.in_({o.supplier_id for o in offers} or {"-"})))).scalars()}
+                idx = h.rt.bus.cfg.index_price
+                now = self.clock.now()
+                for sid in sorted({o.supplier_id for o in offers}):
+                    mine = [o for o in offers if o.supplier_id == sid]
+                    quotes = [o for o in mine if o.side == "supplier"]
+                    if not quotes or sups.get(sid) is None or sups[sid].org_id is None:
+                        continue
+                    won = st.awarded == sid and st.outcome is OutcomeEnum.DEAL
+                    final = Decimal(str(st.deals[sid]["price"])) if sid in st.deals and won else quotes[-1].unit_price
+                    row = dict(project_id=h.pid, category=h.rt.need.category, rounds=max(o.round for o in mine), opening_price=quotes[0].unit_price,
+                               final_price=final, index_price=idx, outcome="DEAL" if won else "NO_DEAL", created_at=now)
+                    s.add(NegotiationMemory(owner_org_id=proj.buyer_org_id, owner_side="BUYER", counterparty=sid, **row))
+                    s.add(NegotiationMemory(owner_org_id=sups[sid].org_id, owner_side="SUPPLIER", counterparty=str(proj.buyer_org_id), **row))
+        except Exception as e:  # noqa: BLE001 - memory is a convenience for later runs; it must never fail a finished one
+            log.warning("memory.write_failed", error=type(e).__name__)
 
     async def _saved_profiles(self, db: AsyncSession, spec: ScenarioSpec, max_age_days: int) -> None:
         """Fresh saved profiles of supplier organizations become those suppliers' own answers to a request for information. A stale one is not used."""
@@ -905,6 +946,7 @@ class ProjectService:
                     await self._sync_with_retry(h)
                     self.broker.notify(pid)
                 await self._anchor(pid)
+                await self._remember(h)
                 if not h.stopping:
                     self._evict_if_terminal(h)
 

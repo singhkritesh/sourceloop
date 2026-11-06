@@ -17,6 +17,7 @@ from sourceloop.audit.canonical import dumps, sha256_hex
 from sourceloop.data.enums import ApprovalKindEnum as K
 from sourceloop.data.models import AuditEvent, Contract, Mandate, Offer, Project, ProjectSupplier, Supplier
 from sourceloop.policy.judge import CODES
+from sourceloop.policy.leverage import describe
 
 ACK_KINDS = frozenset({K.AWARD, K.SIGNATURE, K.SUPPLIER_ACCEPT, K.HOLD_RELEASE})  # the points where a company is committed or money moves
 Q1, Q4 = Decimal("0.1"), Decimal("0.0001")
@@ -37,7 +38,8 @@ def _pct(a: Decimal, b: Decimal) -> str | None:
     return str(((a - b) / a * 100).quantize(Q1)) if a > 0 else None
 
 
-def _thread(sid: str, name: str, offers: list[Offer], moves: dict[tuple[str, int, str], dict], verdicts: list[AuditEvent], you: bool) -> dict[str, Any]:
+def _thread(sid: str, name: str, offers: list[Offer], moves: dict[tuple[str, int, str], dict], verdicts: list[AuditEvent], you: bool,
+            leverage: list[AuditEvent]) -> dict[str, Any]:
     quotes = [o for o in offers if o.side == "supplier"]
     counters = [o for o in offers if o.side != "supplier"]
     steps: list[dict[str, Any]] = []
@@ -61,7 +63,13 @@ def _thread(sid: str, name: str, offers: list[Offer], moves: dict[tuple[str, int
             if c in CODES:
                 notes.append({"round": ev.get("round"), "by": ("you" if you else "supplier") if ev.get("actor") == "supplier" else "buyer",
                               "level": r.outcome, "text": CODES[c][1]})
-    out: dict[str, Any] = {"supplier_id": sid, "name": name, "rounds": max((o.round for o in offers), default=0), "steps": steps, "conduct": notes}
+    said = []
+    for r in leverage:
+        ev = _ev(r)
+        if ev.get("supplier") == sid:
+            text = describe(tuple(ev.get("signals", ())), ev.get("price_gap_band"))
+            said.append({"text": text.replace("The buyer said:", "The buyer told you:" if you else f"Your agent told {name}:")})
+    out: dict[str, Any] = {"supplier_id": sid, "name": name, "rounds": max((o.round for o in offers), default=0), "steps": steps, "conduct": notes, "leverage": said}
     if quotes:
         first, last = quotes[0].unit_price, quotes[-1].unit_price
         out["opening_quote"], out["latest_quote"] = str(first), str(last)
@@ -81,7 +89,7 @@ async def build(db: AsyncSession, proj: Project, side: str, mine: set[str] | Non
     if you:
         q = q.where(Offer.supplier_id.in_(mine or {"-"}))
     offers = list((await db.execute(q)).scalars())
-    rows = list((await db.execute(select(AuditEvent).where(AuditEvent.project_id == str(pid), AuditEvent.action.in_(("agent_decision", "negotiation_judged", "payment_term_selected")))
+    rows = list((await db.execute(select(AuditEvent).where(AuditEvent.project_id == str(pid), AuditEvent.action.in_(("agent_decision", "negotiation_judged", "payment_term_selected", "leverage_stated")))
                                   .order_by(AuditEvent.seq))).scalars())
     moves: dict[tuple[str, int, str], dict] = {}
     for r in rows:
@@ -89,10 +97,11 @@ async def build(db: AsyncSession, proj: Project, side: str, mine: set[str] | Non
         if r.action == "agent_decision" and ev.get("supplier") is not None and ev.get("round") is not None:
             moves[(ev["supplier"], int(ev["round"]), "buyer" if ev.get("agent") == "buyer" else "supplier")] = ev
     judged = [r for r in rows if r.action == "negotiation_judged"]
+    stated = [r for r in rows if r.action == "leverage_stated"]
     by_sid: dict[str, list[Offer]] = {}
     for o in offers:
         by_sid.setdefault(o.supplier_id, []).append(o)
-    threads = [_thread(s, names.get(s, s), v, moves, judged, you) for s, v in sorted(by_sid.items())]
+    threads = [_thread(s, names.get(s, s), v, moves, judged, you, stated) for s, v in sorted(by_sid.items())]
     contract = (await db.execute(select(Contract).where(Contract.project_id == pid))).scalar_one_or_none()
     deal: dict[str, Any] | None = None
     if contract and (not you or contract.supplier_id in (mine or set())):

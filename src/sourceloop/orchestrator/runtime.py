@@ -35,6 +35,8 @@ from sourceloop.orchestrator.approvals import Approval, ApprovalService
 from sourceloop.orchestrator.transitions import check_status, enabled_stages, next_stage
 from sourceloop.policy.engine import Action
 from sourceloop.policy.judge import Level, Turn, Verdict, combine, judge, turn_lines
+from sourceloop.policy.leverage import Quote, Statement, verify
+from sourceloop.policy.leverage import build as build_leverage
 from sourceloop.policy.mandates import BuyerMandate, SupplierMandate, overlap
 from sourceloop.policy.terms import term_options
 
@@ -77,6 +79,8 @@ class RunConfig:
     payment_term_options: bool = False  # Studio workflow.payment_term_options: the award shows each finalist's price per payment term; the buyer picks one
     payment_base_days: int = 30
     financing_rate_pct: Decimal = Decimal("8")
+    leverage: bool = False  # Studio workflow.leverage: the buyer agent may truthfully state competing offers (closed signals, rounded band) to a finalist
+    history_best: dict[str, dict[str, str]] = field(default_factory=dict)  # category -> supplier id -> best price the buyer paid it before (from its own memory)
     use_saved_profile: bool = False  # Studio workflow.use_saved_profile
     saved_profile_fields: frozenset[str] = frozenset()  # "supplier_id:field" answers that come from a supplier's saved profile (set by the API)
     agent_rfi: bool = False  # Studio workflow.agent_rfi: the buyer agent asks suppliers with blank registry fields for them
@@ -477,7 +481,9 @@ class RunExecutor:
                     st.dropped[x.supplier_id] = "NO_OVERLAP"
                     continue
                 finalists.append(x)
-            outs = await par.gather(*[self._negotiate(x) for x in finalists])
+            quotes = {x.supplier_id: Quote(x.supplier_id, Decimal(str(x.offer.payload["unit_price"])), int(x.offer.payload["lead_time_weeks"]), x.delay_probability)
+                      for x in ranked}
+            outs = await par.gather(*[self._negotiate(x, await self._leverage_for(x.supplier_id, quotes)) for x in finalists])
             for x, deal in zip(finalists, outs, strict=True):
                 if deal:
                     st.deals[x.supplier_id] = deal
@@ -564,8 +570,37 @@ class RunExecutor:
         await self._audit("candidate_dropped", rule_id="JUDGE_INAPPROPRIATE", evidence=[{"supplier": sid}], outcome="DROPPED")
         await self.rt.buyer.walk(sid, "JUDGED_STOP")
 
-    async def _negotiate(self, x: Evaluated) -> dict[str, Any] | None:
+    async def _leverage_for(self, sid: str, quotes: dict[str, Quote]) -> Statement | None:
+        """What the buyer's agent may truthfully say to this finalist about the other offers. Built from the real quotes, then checked again by code
+        before it is sent: a claim the facts do not support is blocked and audited, never delivered."""
+        rt = self.rt
+        if not rt.cfg.leverage:
+            return None
+        own, others = quotes[sid], [q for s, q in sorted(quotes.items()) if s != sid]
+        paid = rt.cfg.history_best.get(rt.need.category, {}).get(sid)
+        before = Decimal(paid) if paid else None
+        stmt = build_leverage(own, others, before)
+        if stmt is None:
+            return None
+        bad = verify(stmt, own, others, before)
+        if bad:
+            await self._audit("leverage_blocked", rule_id=bad[0], evidence=[{"supplier": sid, "codes": bad}], outcome="BLOCKED")
+            return None
+        return stmt
+
+    async def _state_leverage(self, sid: str, stmt: Statement) -> None:
+        """Audit first (signals, band, a fingerprint of the offers it rests on; no names or prices), then deliver the typed message."""
+        rt = self.rt
+        payload = {"signals": list(stmt.signals), "price_gap_band": stmt.price_gap_band, "based_on": stmt.based_on}
+        await self._audit("leverage_stated", outcome="STATED", evidence=[{"supplier": sid, **payload, "basis_hash": stmt.basis_hash}])
+        r = await rt.buyer.send_all(T.LEVERAGE, [f"supplier:{sid}"], lambda _t: payload)
+        if isinstance(r[f"supplier:{sid}"], Rejected):
+            await self._audit("leverage_not_delivered", rule_id=r[f"supplier:{sid}"].rule_id or r[f"supplier:{sid}"].code, evidence=[{"supplier": sid}], outcome="DROPPED")
+
+    async def _negotiate(self, x: Evaluated, stated: Statement | None = None) -> dict[str, Any] | None:
         rt, sid = self.rt, x.supplier_id
+        if stated is not None:
+            await self._state_leverage(sid, stated)
         last: Envelope = x.offer
         my_last: Decimal | None = None
         sup_prev: Decimal = Decimal(str(last.payload["unit_price"]))

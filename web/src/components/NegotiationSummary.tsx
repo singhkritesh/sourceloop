@@ -25,6 +25,7 @@ export function NegotiationSummaryView({ s }: { s: Summary }) {
           <ol className="stack" style={{ margin: '8px 0', paddingLeft: 18 }}>
             {t.steps.map((st, i) => <li key={i}>{st.text}{st.why && <span className="muted"> {st.why}</span>}</li>)}
           </ol>
+          {t.leverage.length > 0 && <ul className="stack" style={{ margin: '4px 0', paddingLeft: 18 }}>{t.leverage.map((l, i) => <li key={i}>{l.text}</li>)}</ul>}
           {t.conduct.length > 0 && <div className="row wrap">{t.conduct.map((c, i) => <Badge key={i} tone="warn">{c.by}: {c.text}</Badge>)}</div>}
         </details>
       ))}

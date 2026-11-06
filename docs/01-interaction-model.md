@@ -93,6 +93,9 @@ The bus validates schema (`extra=forbid`), type-for-stage, signature, participan
 ### 7a. Payment terms and reopening
 At the award the orchestrator prices each finalist's deal at Net 30/45/60/90 (`policy/terms.py`, financing rate from Studio) and lists only the terms inside both sides' own limits; the buyer may pick one (audited `payment_term_selected`). Before signing, the buyer may reopen: the project stops, a successor starts from the same need with a new signed mandate version, both chains record `negotiation_reopened` (chains are never rewound).
 
+### 7b. Leverage (competing offers)
+Before negotiating with a finalist the buyer agent may send `LEVERAGE`: closed signals (other offers exist, a cheaper one, a faster one, a more reliable one, a lower price paid before) and a rounded price band. Never a name, an exact price or terms. The orchestrator builds it from the offers on the table and rebuilds it to verify it before delivery; an untrue claim is blocked and audited. The supplier reads the signals and may move its planned counter towards the buyer, never below its floor. Each side's summary shows what was said. Each organization's agent also keeps its own negotiation memory (`negotiation_memory`). See `docs/leverage.md` for the measured effect.
+
 ## 8. Escalation triggers
 
 Defaults (editable in the Studio unless marked 🔒 invariant): 🔒 watchlist/forced-labor hit; 🔒 locked clause touched; 🔒 offer outside mandate; missing or unverified data; price outside index band; max rounds reached; supplier claim not backed by registry; subagent confidence below threshold; subagent timeout; custom-subagent signals; budget exceeded.

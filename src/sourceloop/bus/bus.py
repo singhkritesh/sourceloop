@@ -51,6 +51,7 @@ SENDERS: dict[T, frozenset[str]] = {
     T.RFI: frozenset({"buyer"}),
     T.RFI_REPLY: frozenset({"supplier"}),
     T.FOLLOW_UP: frozenset({"buyer"}),
+    T.LEVERAGE: frozenset({"buyer"}),
     T.QUAL_RESULT: frozenset({"buyer", "orchestrator"}),
     T.RFQ: frozenset({"buyer"}),
     T.OFFER: frozenset({"supplier"}),

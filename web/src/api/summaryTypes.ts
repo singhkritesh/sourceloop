@@ -1,6 +1,6 @@
 export interface SummaryStep { round: number; by: 'supplier' | 'buyer'; unit_price: string; lead_time_weeks: number; text: string; why?: string }
 export interface SummaryThread {
-  supplier_id: string; name: string; rounds: number; steps: SummaryStep[]; conduct: { round: number | null; by: string; level: string | null; text: string }[];
+  supplier_id: string; name: string; rounds: number; steps: SummaryStep[]; conduct: { round: number | null; by: string; level: string | null; text: string }[]; leverage: { text: string }[];
   opening_quote?: string; latest_quote?: string; latest_counter?: string; supplier_moved_pct?: string | null;
 }
 export interface NegotiationSummary {

@@ -20,6 +20,7 @@ VALID: dict[T, dict[str, Any]] = {
     T.RFI: {"fields": ["years_in_business"]},
     T.RFI_REPLY: {"values": {"years_in_business": 12}},
     T.FOLLOW_UP: {"about": "RFQ", "attempt": 1},
+    T.LEVERAGE: {"signals": ["OTHER_OFFERS"], "based_on": 2},
     T.QUAL_RESULT: {"status": "REVIEW", "reasons": ["X"]},
     T.RFQ: {"category": "pcb_assembly", "volume_units": 100, "target_lead_time_weeks": 10},
     T.OFFER: {"round": 1, "unit_price": "100", "lead_time_weeks": 8, "capacity_units": 500},

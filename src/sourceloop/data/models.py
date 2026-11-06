@@ -402,6 +402,25 @@ class Mailbox(Base):
     created_at: Mapped[datetime] = mapped_column(UTCDateTime)
 
 
+class NegotiationMemory(Base):
+    """What a negotiation came to, kept for the organization whose agent took part, so that agent can use it next time. Each side keeps only its own
+    memory: a buyer's rows name the suppliers it dealt with, a supplier's rows name only the buyer organization. Prices here are the owner's own."""
+    __tablename__ = "negotiation_memory"
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    owner_org_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organization.id"), index=True)
+    owner_side: Mapped[str] = mapped_column(String(8))  # BUYER | SUPPLIER
+    project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("project.id"), index=True)
+    counterparty: Mapped[str] = mapped_column(String(64))  # supplier id (buyer's memory) or buyer organization id (supplier's memory)
+    category: Mapped[str] = mapped_column(String(80))
+    rounds: Mapped[int] = mapped_column(Integer)
+    opening_price: Mapped[Decimal] = mapped_column(Numeric(14, 4))
+    final_price: Mapped[Decimal] = mapped_column(Numeric(14, 4))
+    index_price: Mapped[Decimal | None] = mapped_column(Numeric(14, 4), nullable=True)
+    outcome: Mapped[str] = mapped_column(String(10))  # DEAL | NO_DEAL
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime)
+    __table_args__ = (UniqueConstraint("owner_org_id", "project_id", "counterparty", name="uq_negotiation_memory"),)
+
+
 class SupplierSavedProfile(Base):
     """A supplier organization's own declared figures, kept so its agent can answer a request for information without a person. Self-declared and
     unverified; it only fills blanks. Never holds a limit, a floor or a price."""

@@ -179,6 +179,8 @@ class WorkflowCfg(_Section):
         "number", help="How many times the buyer agent chases a supplier that has not answered a request for quote. Each attempt is audited."))
     payment_term_options: bool = Field(False, json_schema_extra=W(
         "switch", help="The award decision shows each finalist's price at Net 30, 45, 60 and 90 days and the buyer picks the term. Only terms that stay inside both sides' limits are offered."))
+    leverage: bool = Field(False, json_schema_extra=W(
+        "switch", help="Before negotiating with a finalist, the buyer agent may say that other offers exist and how they compare, in rounded terms: never a name, an exact price or terms. The code builds the statement from the real offers and blocks any claim they do not support."))
     require_summary_ack: bool = Field(False, json_schema_extra=W(
         "switch", help="Before the award, the final terms, the signature and the payment release, the person must read the negotiation summary and confirm it. The decision is refused without the confirmation, and the confirmation is audited."))
     use_saved_profile: bool = Field(False, json_schema_extra=W(
@@ -294,7 +296,7 @@ class StudioConfig(_Section):
                          standard_clauses=tuple(w.standard_clauses), news_escalate_severity=w.news_escalate_severity,
                          news_min_confidence=w.news_min_confidence, config_version=config_version,
                          confirm_requirement=w.checkpoints.requirement_confirmation, supplier_acceptance=w.checkpoints.supplier_acceptance, agent_rfi=w.agent_rfi, follow_up_attempts=w.follow_up_attempts,
-                         use_saved_profile=w.use_saved_profile, payment_term_options=w.payment_term_options, payment_base_days=w.payment_base_days, financing_rate_pct=w.financing_rate_pct,
+                         leverage=w.leverage, use_saved_profile=w.use_saved_profile, payment_term_options=w.payment_term_options, payment_base_days=w.payment_base_days, financing_rate_pct=w.financing_rate_pct,
                          need_autonomy=int(w.autonomy.get(StageEnum.NEED, 1)), batched_async=w.checkpoints.batched_async,
                          judge_llm=w.negotiation.judge_llm, llm_moves=w.negotiation.llm_moves)
 

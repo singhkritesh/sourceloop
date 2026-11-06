@@ -124,6 +124,7 @@ class ScenarioSpec:
     supplier_allowed_tools: frozenset[str] | None = None
     # explicit structured need fields from the API (category, volume_units, required_certs, ..., target_price); {} = synthetic need
     need_overrides: dict = field(default_factory=dict)
+    saved_profiles: dict = field(default_factory=dict)  # supplier id -> {field: value} from that supplier's own saved profile (fresh ones only)
 
 
 def _apply_tool_cfg(runner: ToolRunner, spec: ScenarioSpec, allowed: frozenset[str] | None = None, who: str = "") -> None:
@@ -225,7 +226,7 @@ def build_project(spec: ScenarioSpec, vis: Registry | None = None, full: Registr
                               max_tool_calls=spec.supplier_tool_limits.get(sid, spec.supplier_max_tool_calls),
                               facts={k: float(v) for k, v in (("capacity_units", rec.capacity_units), ("lead_time_weeks", rec.lead_time_weeks),
                                                               ("financial_risk", rec.financial_risk), ("years_in_business", rec.years_in_business))
-                                     if v is not None},
+                                     if v is not None} | {k: float(v) for k, v in spec.saved_profiles.get(sid, {}).items()},
                               **({"deliberator": deliberator} if deliberator is not None else {}))
         return SupplierRuntime(sid, rec.name, rec.country, agent, mandate)
 

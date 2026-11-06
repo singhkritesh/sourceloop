@@ -63,6 +63,7 @@ export const can = {
   adminStudio: (r?: Role) => r === 'SUPER_ADMIN',
   seeSettings: (r?: Role) => r === 'SUPER_ADMIN' || r === 'EVALUATOR',
   editSettings: (r?: Role) => r === 'SUPER_ADMIN',
+  seeSavedProfile: (r?: Role) => r === 'SUPPLIER',   // the supplier user keeps its organization's declared figures (the supplier admin reaches it through the API only)
   seeOrganization: (r?: Role) => r === 'ADMIN' || r === 'SUPER_ADMIN' || r === 'EVALUATOR',
   editOrganization: (r?: Role) => r === 'ADMIN' || r === 'SUPER_ADMIN',
   manageOrganizations: (r?: Role) => r === 'SUPER_ADMIN' || r === 'EVALUATOR',

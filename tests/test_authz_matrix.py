@@ -27,6 +27,7 @@ ACTORS = {  # key -> (role, relation to the project under test)
 # routes whose handler refuses an admin of a supplier organization (it would expose the buyer's side or run controls)
 SUPPLIER_ADMIN_DENIED = {"/projects/{pid}/audit/verify", "/projects/{pid}/audit/export", "/reviewers/override-rates", "/projects/{pid}/escalations",
                          "/projects/{pid}/stop", "/projects/{pid}/resume", "/suppliers/search"}
+BUYER_ADMIN_DENIED = {"/supplier-profile"}  # routes that belong to a supplier organization only
 STUDIO_READ = (R.DESIGNER, R.SUPER_ADMIN, R.EVALUATOR)
 STUDIO_DESIGN = (R.DESIGNER, R.SUPER_ADMIN)
 _DEFAULT_CFG = default_config().model_dump(mode="json")
@@ -51,6 +52,7 @@ ROUTES = [
     ("POST", "/projects/{pid}/reopen", (R.BUYER,), True, None),  # buyer only; the allowed path is in test_reopen.py
     ("GET", "/approvals", APPROVAL_ROLES, False, False),
     ("POST", "/approvals/{aid}/resolve", (*BUYER_SIDE, R.SUPPLIER, R.ADMIN, R.SUPER_ADMIN), True, None),
+    ("GET", "/supplier-profile", (R.SUPPLIER, R.ADMIN), False, False),  # a supplier organization's own saved figures (the admin of a BUYER organization is refused: BUYER_ADMIN_DENIED)
     ("GET", "/suppliers/search", (R.BUYER, R.EVALUATOR, R.ADMIN, R.SUPER_ADMIN), False, False),
     # ---- organization administration (users / own-side settings / SBN's organizations). Per-user and per-version routes
     # (PATCH /org/users/{id}, .../reset-password, POST /org/overrides/rollback) are tenant-scoped by id and covered in test_org_admin.py.
@@ -118,6 +120,8 @@ ITEM_ROLE = {"/approvals/{aid}/resolve": R.BUYER}  # the parked approval targets
 
 def expected(role: R, relation: str, allowed: tuple, scoped: bool, evaluator_write: bool, tmpl: str = "") -> set[str]:
     if role not in allowed:
+        return {"403"}
+    if role is R.ADMIN and relation == "own" and tmpl in BUYER_ADMIN_DENIED:
         return {"403"}
     if relation == "supplier":  # ADMIN of a supplier organization: sees the project only through the supplier view
         if tmpl in SUPPLIER_ADMIN_DENIED:

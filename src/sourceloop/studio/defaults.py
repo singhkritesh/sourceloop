@@ -45,7 +45,7 @@ def default_config() -> StudioConfig:
         providers={"ollama": ProviderDef(kind=ProviderKindEnum.OLLAMA, base_url=os.environ.get("OLLAMA_BASE_URL") or OLLAMA_URL, is_local=True)},
         llm=LlmSection(mode="replay", roles=models),
         workflow=WorkflowCfg(checkpoints=CheckpointCfg(supplier_acceptance=os.environ.get("LLM_MODE") == "live"),
-                             agent_rfi=os.environ.get("LLM_MODE") == "live",
+                             agent_rfi=os.environ.get("LLM_MODE") == "live", use_saved_profile=os.environ.get("LLM_MODE") == "live",
                              payment_term_options=os.environ.get("LLM_MODE") == "live"),
         agents={k: AgentDef(timeout_s=_TOOL_TIMEOUTS.get(k, 20)) for k in AGENT_KEYS},
         prompts={k: PromptDef(body=b) for k, b in DEFAULT_BODIES.items()},

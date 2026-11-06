@@ -29,6 +29,7 @@ from sourceloop.api.routers import (
     projects,
     reviewers,
     studio,
+    supplier_profile,
     suppliers,
 )
 from sourceloop.api.routers import settings as settings_router
@@ -169,6 +170,7 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
     app.include_router(perspective.router, prefix=API_PREFIX)
     app.include_router(org.router, prefix=API_PREFIX)
     app.include_router(mailbox.router, prefix=API_PREFIX)
+    app.include_router(supplier_profile.router, prefix=API_PREFIX)
     return app
 
 

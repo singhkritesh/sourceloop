@@ -5,6 +5,7 @@ import { ErrorBoundary, Skeleton } from './components/ui';
 import { Approvals } from './pages/Approvals';
 import { Assistant } from './pages/Assistant';
 import { Mailbox } from './pages/Mailbox';
+import { SavedProfilePage } from './pages/SavedProfile';
 import { Login } from './pages/Login';
 import { NotFound } from './pages/NotFound';
 import { Help } from './pages/Help';
@@ -45,6 +46,7 @@ export function App() {
           <Route path="/projects/:id" element={<Guard ok={can.seeProjects}><ProjectPage /></Guard>} />
           <Route path="/organization" element={<Guard ok={can.seeOrganization}><Organization /></Guard>} />
           <Route path="/mailbox" element={<Guard ok={can.resolveApprovals}><Mailbox /></Guard>} />
+          <Route path="/profile" element={<Guard ok={can.seeSavedProfile}><SavedProfilePage /></Guard>} />
           <Route path="/assistant" element={<Guard ok={can.seeApprovals}><Assistant /></Guard>} />
           <Route path="/approvals" element={<Guard ok={can.seeApprovals}><Approvals /></Guard>} />
           <Route path="/studio/*" element={<Guard ok={can.seeStudio}><Studio /></Guard>} />

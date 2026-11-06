@@ -402,6 +402,16 @@ class Mailbox(Base):
     created_at: Mapped[datetime] = mapped_column(UTCDateTime)
 
 
+class SupplierSavedProfile(Base):
+    """A supplier organization's own declared figures, kept so its agent can answer a request for information without a person. Self-declared and
+    unverified; it only fills blanks. Never holds a limit, a floor or a price."""
+    __tablename__ = "supplier_saved_profile"
+    org_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organization.id"), primary_key=True)
+    values: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    confirmed_at: Mapped[datetime] = mapped_column(UTCDateTime)
+    updated_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("app_user.id"))
+
+
 class Clause(Base):
     __tablename__ = "clause"
     key: Mapped[str] = mapped_column(String(60), primary_key=True)

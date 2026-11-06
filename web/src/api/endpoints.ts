@@ -98,6 +98,13 @@ export interface MailItem {
   id: string; channel: 'EMAIL' | 'SMS'; direction: 'IN' | 'OUT'; kind: string; subject: string; body: string;
   project_id: string | null; approval_id: string | null; read: boolean; open: boolean; created_at: string;
 }
+export interface SavedProfile { values: Record<string, number>; confirmed_at: string | null; stale: boolean; source: string }
+export const supplierProfile = {
+  get: () => http.get<SavedProfile>('/supplier-profile'),
+  save: (values: Record<string, number>) => http.put<SavedProfile>('/supplier-profile', { values }),
+  remove: () => http.del<void>('/supplier-profile'),
+};
+
 export const mailbox = {
   list: (channel?: 'EMAIL' | 'SMS') => http.get<{ items: MailItem[]; unread: { EMAIL: number; SMS: number } }>('/mailbox', { query: { channel } }),
   read: (id: string) => http.post<{ id: string; read: boolean }>(`/mailbox/${id}/read`),

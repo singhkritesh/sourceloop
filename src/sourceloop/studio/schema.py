@@ -179,6 +179,10 @@ class WorkflowCfg(_Section):
         "number", help="How many times the buyer agent chases a supplier that has not answered a request for quote. Each attempt is audited."))
     payment_term_options: bool = Field(False, json_schema_extra=W(
         "switch", help="The award decision shows each finalist's price at Net 30, 45, 60 and 90 days and the buyer picks the term. Only terms that stay inside both sides' limits are offered."))
+    use_saved_profile: bool = Field(False, json_schema_extra=W(
+        "switch", help="A supplier's saved profile (its own declared figures) answers the buyer agent's request for information. It only fills blanks, stays self-declared and unverified, and the same rules decide."))
+    saved_profile_max_age_days: int = Field(90, ge=1, le=730, json_schema_extra=W(
+        "number", help="A saved profile not confirmed within this many days is not used."))
     payment_base_days: int = Field(30, ge=0, le=120, json_schema_extra=W(
         "number", help="The payment term the negotiated price is quoted at."))
     financing_rate_pct: Decimal = Field(Decimal("8"), ge=0, le=40, json_schema_extra=W(
@@ -288,7 +292,7 @@ class StudioConfig(_Section):
                          standard_clauses=tuple(w.standard_clauses), news_escalate_severity=w.news_escalate_severity,
                          news_min_confidence=w.news_min_confidence, config_version=config_version,
                          confirm_requirement=w.checkpoints.requirement_confirmation, supplier_acceptance=w.checkpoints.supplier_acceptance, agent_rfi=w.agent_rfi, follow_up_attempts=w.follow_up_attempts,
-                         payment_term_options=w.payment_term_options, payment_base_days=w.payment_base_days, financing_rate_pct=w.financing_rate_pct,
+                         use_saved_profile=w.use_saved_profile, payment_term_options=w.payment_term_options, payment_base_days=w.payment_base_days, financing_rate_pct=w.financing_rate_pct,
                          need_autonomy=int(w.autonomy.get(StageEnum.NEED, 1)), batched_async=w.checkpoints.batched_async,
                          judge_llm=w.negotiation.judge_llm, llm_moves=w.negotiation.llm_moves)
 

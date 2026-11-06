@@ -77,6 +77,8 @@ class RunConfig:
     payment_term_options: bool = False  # Studio workflow.payment_term_options: the award shows each finalist's price per payment term; the buyer picks one
     payment_base_days: int = 30
     financing_rate_pct: Decimal = Decimal("8")
+    use_saved_profile: bool = False  # Studio workflow.use_saved_profile
+    saved_profile_fields: frozenset[str] = frozenset()  # "supplier_id:field" answers that come from a supplier's saved profile (set by the API)
     agent_rfi: bool = False  # Studio workflow.agent_rfi: the buyer agent asks suppliers with blank registry fields for them
     supplier_acceptance: bool = False  # Studio workflow.checkpoints.supplier_acceptance: the awarded supplier's user confirms the final terms
     supplier_users: frozenset[str] | None = None  # suppliers whose organization has a user account (None = not known); only those can be asked
@@ -412,7 +414,8 @@ class RunExecutor:
         declared: dict[str, tuple[tuple[str, float], ...]] = {}
         for e in self._buyer_inbox({T.RFI_REPLY}):
             declared[e.from_agent.split(":", 1)[1]] = tuple(sorted(e.payload["values"].items()))
-        await self._audit("rfi_round", outcome="ASKED", evidence=[{"suppliers": sorted(gaps), "answered": sorted(declared)}])
+        await self._audit("rfi_round", outcome="ASKED", evidence=[{"suppliers": sorted(gaps), "answered": sorted(declared),
+                                                          "from_saved_profile": sorted(f for f in rt.cfg.saved_profile_fields if f.split(":", 1)[0] in declared)}])
         for s, vals in sorted(declared.items()):
             comp = await rt.buyer.screen(rt.need, s, vals)
             if comp.ok and comp.value and comp.value.status == "QUALIFIED":

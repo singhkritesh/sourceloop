@@ -17,6 +17,7 @@ import time
 import types
 import uuid
 from dataclasses import dataclass, field
+from datetime import timedelta
 from decimal import Decimal
 from types import SimpleNamespace
 from typing import Any
@@ -60,6 +61,7 @@ from sourceloop.data.models import (
     RevokedToken,
     SubagentCall,
     Supplier,
+    SupplierSavedProfile,
     User,
     WatchlistEntry,
 )
@@ -273,6 +275,8 @@ class ProjectService:
         if spec.run.supplier_acceptance and not self.settings.demo_role_login:  # only a supplier whose organization has a user can be asked; the others stay agent-only (audited)
             with_users = select(Supplier.id).join(User, User.org_id == Supplier.org_id).where(User.role == RoleEnum.SUPPLIER)
             spec.run = dataclasses.replace(spec.run, supplier_users=frozenset((await db.execute(with_users)).scalars()))
+        if spec.run.use_saved_profile:
+            await self._saved_profiles(db, spec, cfg.workflow.saved_profile_max_age_days)
         release: list[Any] = []
         if mode == "live":
             await self._live_llm(db, cfg, spec, release)
@@ -426,6 +430,16 @@ class ProjectService:
                 models = {m.model for m in cfg.llm.roles.values() if m.provider == name}
                 models |= {a.model_override.model for a in cfg.agents.values() if a.model_override and a.model_override.provider == name}
                 release.extend(functools.partial(prov.release, m) for m in sorted(models))
+
+    async def _saved_profiles(self, db: AsyncSession, spec: ScenarioSpec, max_age_days: int) -> None:
+        """Fresh saved profiles of supplier organizations become those suppliers' own answers to a request for information. A stale one is not used."""
+        oldest = self.clock.now() - timedelta(days=max_age_days)
+        rows = (await db.execute(select(Supplier.id, SupplierSavedProfile.values, SupplierSavedProfile.confirmed_at)
+                                 .join(SupplierSavedProfile, SupplierSavedProfile.org_id == Supplier.org_id))).all()
+        for sid, vals, at in rows:
+            if at >= oldest and vals:
+                spec.saved_profiles[sid] = dict(vals)
+        spec.run = dataclasses.replace(spec.run, saved_profile_fields=frozenset(f"{s}:{k}" for s, v in spec.saved_profiles.items() for k in v))
 
     async def _org_layers(self, db: AsyncSession, cfg: StudioConfig, buyer_org_id: uuid.UUID,
                           pins: dict[str, Any] | None) -> tuple[StudioConfig, dict[str, int], dict[str, Any]]:

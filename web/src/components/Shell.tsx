@@ -40,6 +40,7 @@ export function Shell({ children }: { children: ReactNode }) {
           )}
           {can.resolveApprovals(role) && <NavLink to="/assistant">Chat</NavLink>}
           {can.resolveApprovals(role) && <NavLink to="/mailbox">Mail{!!unreadMail.data && <Badge tone="warn">{unreadMail.data}</Badge>}</NavLink>}
+          {can.seeSavedProfile(role) && <NavLink to="/profile">Our figures</NavLink>}
           {can.seeOrganization(role) && <NavLink to="/organization">{role === 'ADMIN' ? 'Organization' : 'Organizations'}</NavLink>}
           {can.seeStudio(role) && <NavLink to="/studio">Studio</NavLink>}
           {can.seeSettings(role) && <NavLink to="/settings">Settings</NavLink>}

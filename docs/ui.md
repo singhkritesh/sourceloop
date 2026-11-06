@@ -84,6 +84,9 @@ New port: **3010** (web dev / preview). Update the global port registry.
 
 The in-app stand-in for email and SMS, for buyer users and supplier users. Two tabs: Email and Texts, with unread counts in the nav. A decision that is waiting arrives as an email and a text; reply **APPROVE**, or **DECLINE** and a reason (10+ characters), right in the window. It does exactly what the buttons do (same checks, same audit). Agent chasing shows up here too: a supplier sees a request for information or a follow-up, the buyer sees that a supplier answered. Reminders arrive after 24 hours without an answer (three at most). If the server restarted and lost a live run, the buyer finds a notice here and a **Run again from the same need** button on the project.
 
+## Negotiation summary
+On the award, the supplier's acceptance, the signature and the payment release the drawer shows a **Negotiation summary** built from the record: each quote and counter, who chose each move and why, the judge's notes, the agreed price and payment term, and the record fingerprint. Approve and Edit stay disabled until the person ticks that they read it (Studio `workflow.require_summary_ack`); declining needs no tick. A supplier sees only its own thread. If the record changes while the drawer is open the tick is cleared and the summary reloads.
+
 ## Our figures (supplier)
 The supplier user's **Our figures** page (`/profile`) saves capacity, lead time, financial risk and years in business once. The supplier's agent gives them when a buyer's agent asks for information, instead of a person filling in a questionnaire. They are labelled declared and unverified, fill blanks only, and an entry older than the Studio limit (90 days by default) is shown as out of date and not used until it is confirmed again. Switch: Studio `workflow.use_saved_profile`.
 

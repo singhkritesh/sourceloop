@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { approvals } from '../api/endpoints';
+import { approvals, projects } from '../api/endpoints';
+import { SUMMARY_KINDS } from '../api/summaryTypes';
+import { NegotiationSummaryView } from '../components/NegotiationSummary';
 import { ApiError, errorMessage } from '../api/http';
 import { awardTerms, buildEdit, editOptions, isEditable } from '../lib/approvalEdit';
 import { fieldErrors, isLostOnRestart, isRuntimeUnavailable, LOST_ON_RESTART_TEXT } from '../lib/errors';
@@ -83,9 +85,13 @@ function ApprovalDrawer({ a, onClose, canResolve }: { a: Approval; onClose: () =
   const [fieldErr, setFieldErr] = useState<Record<string, string>>({});
   const [lostRuntime, setLostRuntime] = useState(false);
   const [conflict, setConflict] = useState(false);
+  const [read, setRead] = useState(false);
+  const needsSummary = SUMMARY_KINDS.includes(a.kind);
+  const sum = useQuery({ queryKey: ['negotiation-summary', a.project_id, a.id], queryFn: () => projects.negotiationSummary(a.project_id), enabled: needsSummary, refetchOnWindowFocus: false });
   const editable = isEditable(a.kind);
   const options = useMemo(() => editOptions(a.kind, a.evidence), [a.kind, a.evidence]);
   const pending = a.status === 'PENDING';
+  const ackNeeded = needsSummary && pending && !!sum.data?.ack_required;
   const cachedProject = qc.getQueryData<Project>(['project', a.project_id]);
   const lost = lostRuntime || (cachedProject ? isLostOnRestart(cachedProject) : false);
   const conf = findConfidence(a.evidence) ?? findConfidence(a.recommendation);
@@ -96,7 +102,7 @@ function ApprovalDrawer({ a, onClose, canResolve }: { a: Approval; onClose: () =
 
   const m = useMutation({
     mutationFn: (status: 'APPROVED' | 'REJECTED' | 'EDITED') =>
-      approvals.resolve(a.id, { status, comment: comment.trim(), version: a.version, ...(status === 'EDITED' && editObj ? { edit: editObj } : {}) }),
+      approvals.resolve(a.id, { status, comment: comment.trim(), version: a.version, ...(status !== 'REJECTED' && ackNeeded && sum.data ? { summary_hash: sum.data.hash } : {}), ...(status === 'EDITED' && editObj ? { edit: editObj } : {}) }),
     onSuccess: (r) => {
       toast.ok(`Marked ${r.status.toLowerCase()}`);
       void qc.invalidateQueries({ queryKey: ['approvals'] });
@@ -110,6 +116,10 @@ function ApprovalDrawer({ a, onClose, canResolve }: { a: Approval; onClose: () =
         const fe = fieldErrors(e);
         setFieldErr(Object.keys(fe).length ? fe : { _: errorMessage(e) });
         void qc.invalidateQueries({ queryKey: ['approvals'] }); // approval stays pending at the same version
+      } else if (e instanceof ApiError && e.code === 'SUMMARY_CHANGED') {
+        setRead(false);
+        void sum.refetch();
+        toast.warn('The negotiation record changed. Read the updated summary and confirm again.');
       } else if (e instanceof ApiError && e.status === 409) {
         setConflict(true);
         toast.warn('This item changed while you were reviewing it. It was reloaded; review and decide again.');
@@ -122,10 +132,11 @@ function ApprovalDrawer({ a, onClose, canResolve }: { a: Approval; onClose: () =
     if (!pending || m.isPending || lost) return;
     if (s !== 'APPROVED' && !commentOk) { toast.warn('A comment of at least 10 characters is required.'); return; }
     if (s === 'EDITED' && (!editable || !editObj)) return;
+    if (s !== 'REJECTED' && ackNeeded && !read) { toast.warn('Read the negotiation summary and tick the box first.'); return; }
     setConflict(false);
     setFieldErr({});
     m.mutate(s);
-  }, [pending, m, commentOk, editObj, editable, lost]);
+  }, [pending, m, commentOk, editObj, editable, lost, ackNeeded, read]);
 
   useEffect(() => {
     if (!canResolve || !pending || lost) return;
@@ -155,9 +166,12 @@ function ApprovalDrawer({ a, onClose, canResolve }: { a: Approval; onClose: () =
               onSupplier={(v) => { setFieldErr({}); setSupplier(v); setPaymentDays(null); }} evidence={a.evidence} paymentDays={paymentDays} onPaymentDays={setPaymentDays} acceptChange={acceptChange}
               onAccept={(v) => { setFieldErr({}); setAcceptChange(v); }} errors={fieldErr} />
           )}
+          {ackNeeded && sum.data && (
+            <label className="row"><input type="checkbox" checked={read} onChange={(e) => setRead(e.target.checked)} /> I have read the negotiation summary above and it is what I am deciding on.</label>
+          )}
           <div className="row wrap">
-            <button className="btn primary" disabled={m.isPending || lost} onClick={() => go('APPROVED')}><Icon name="check" />Approve <span className="kbd">a</span></button>
-            {!editable || lost ? null : mode === 'edit' ? <button className="btn" disabled={m.isPending || !commentOk || !editObj} onClick={() => go('EDITED')}>Submit edit</button> : <button className="btn" onClick={() => setMode('edit')}>Edit <span className="kbd">e</span></button>}
+            <button className="btn primary" disabled={m.isPending || lost || (ackNeeded && !read)} onClick={() => go('APPROVED')}><Icon name="check" />Approve <span className="kbd">a</span></button>
+            {!editable || lost ? null : mode === 'edit' ? <button className="btn" disabled={m.isPending || !commentOk || !editObj || (ackNeeded && !read)} onClick={() => go('EDITED')}>Submit edit</button> : <button className="btn" onClick={() => setMode('edit')}>Edit <span className="kbd">e</span></button>}
             {mode === 'reject' ? <button className="btn danger" disabled={m.isPending || !commentOk} onClick={() => go('REJECTED')}>Confirm reject</button> : <button className="btn danger" disabled={lost} onClick={() => setMode('reject')}>Reject <span className="kbd">r</span></button>}
             {mode !== 'view' && <button className="btn ghost" onClick={() => setMode('view')}>Cancel</button>}
           </div>
@@ -168,6 +182,7 @@ function ApprovalDrawer({ a, onClose, canResolve }: { a: Approval; onClose: () =
         {conflict && <div className="callout warn" role="alert"><Icon name="alert" /><div><b>Version conflict.</b> Someone else resolved or changed this item; the latest version has been reloaded.</div></div>}
         {!!a.recommendation && <div className="callout info" role="note"><Icon name="info" /><div>{AI_RECOMMENDATION_NOTICE}</div></div>}
         <ApprovalExplainer kind={a.kind} editable={editable} />
+        {needsSummary && (sum.isLoading ? <span className="muted">Loading the negotiation summary…</span> : sum.data ? <NegotiationSummaryView s={sum.data} /> : null)}
         <section><h4>Recommendation</h4><div style={{ marginTop: 6 }}>{a.recommendation ? <Tree value={a.recommendation} /> : <span className="muted">The agent made no recommendation.</span>}</div></section>
         <section><h4>Why a person is needed</h4><div className="row wrap" style={{ marginTop: 6 }}>{a.reasons.length ? a.reasons.map((r) => <span key={r} title={r}><Badge tone="warn">{reasonText(r)}</Badge></span>) : <span className="muted">none recorded</span>}</div></section>
         <section><h4>Agent confidence</h4>

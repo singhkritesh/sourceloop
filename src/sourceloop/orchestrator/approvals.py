@@ -99,7 +99,7 @@ class ApprovalService:
         return self._items[aid]
 
     async def resolve(self, aid: str, status: S, resolver_id: str, role: R, comment: str = "", version: int | None = None,
-                      edit: dict[str, Any] | None = None) -> Approval:
+                      edit: dict[str, Any] | None = None, summary_ack: str | None = None) -> Approval:
         a = self._items[aid]
         if a.status is not S.PENDING or (version is not None and version != a.version):
             raise ApprovalError("APPROVAL_ALREADY_RESOLVED")
@@ -118,7 +118,8 @@ class ApprovalService:
         await self.audit.append(a.project_id, actor_type="human", actor_id=resolver_id, action="approval_resolved",
                                 rule_id=a.kind.value,
                                 evidence=[{"approval": a.id, "decision": status.value, "edit_keys": sorted(str(k) for k in edit),
-                                           "decision_hash": sha256_hex(dumps({"edit": edit, "comment": comment}))}],
+                                           "decision_hash": sha256_hex(dumps({"edit": edit, "comment": comment})),
+                                           **({"summary_ack": summary_ack} if summary_ack else {})}],
                                 outcome=status.value, approver_id=resolver_id)
         a.status, a.resolver_id, a.comment, a.version = status, resolver_id, comment, a.version + 1
         a.edit = edit

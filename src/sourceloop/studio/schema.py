@@ -179,6 +179,8 @@ class WorkflowCfg(_Section):
         "number", help="How many times the buyer agent chases a supplier that has not answered a request for quote. Each attempt is audited."))
     payment_term_options: bool = Field(False, json_schema_extra=W(
         "switch", help="The award decision shows each finalist's price at Net 30, 45, 60 and 90 days and the buyer picks the term. Only terms that stay inside both sides' limits are offered."))
+    require_summary_ack: bool = Field(False, json_schema_extra=W(
+        "switch", help="Before the award, the final terms, the signature and the payment release, the person must read the negotiation summary and confirm it. The decision is refused without the confirmation, and the confirmation is audited."))
     use_saved_profile: bool = Field(False, json_schema_extra=W(
         "switch", help="A supplier's saved profile (its own declared figures) answers the buyer agent's request for information. It only fills blanks, stays self-declared and unverified, and the same rules decide."))
     saved_profile_max_age_days: int = Field(90, ge=1, le=730, json_schema_extra=W(

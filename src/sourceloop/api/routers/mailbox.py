@@ -89,7 +89,7 @@ async def reply(mid: uuid.UUID, body: ReplyBody, request: Request, p: Principal 
                 answer = "Done. You approved it." if status is AS.APPROVED else "Done. You declined it."
             except ApiError as e:
                 answer = {"VERSION_CONFLICT": "This decision was already answered.", "FORBIDDEN": "This decision is not yours to answer."}.get(
-                    e.code, f"It could not be recorded ({e.code.lower().replace('_', ' ')}).")
+                    e.code, "Open SourceLoop and read the negotiation summary first; this decision cannot be approved by reply." if e.code in ("SUMMARY_NOT_CONFIRMED", "SUMMARY_CHANGED") else f"It could not be recorded ({e.code.lower().replace('_', ' ')}).")
     elif row is None:
         answer = "This decision is no longer available."
     mb.add(db, now, org=p.org_id, role=_side(p), channel=channel, kind="REPLY", subject="", body=text, project=project_id,

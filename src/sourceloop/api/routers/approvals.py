@@ -26,6 +26,7 @@ class ResolveBody(BaseModel):
     comment: str = Field(default="", max_length=1000)
     version: int
     edit: dict[str, Any] = Field(default_factory=dict)
+    summary_hash: str | None = Field(default=None, max_length=64)  # the hash of the negotiation summary the person read; required where the pinned config says so
 
 
 _SID = Field(max_length=64, min_length=1)
@@ -154,5 +155,5 @@ async def resolve(aid: uuid.UUID, body: ResolveBody, request: Request,
     if body.status != "EDITED" and body.edit:
         raise ApiError(422, "INVALID_EDIT", "edit is only allowed with status EDITED")
     edit = validate_edit(row, body.edit) if body.status == "EDITED" else {}
-    out = await request.app.state.service.resolve_approval(db, p, row, AS(body.status), body.comment, body.version, edit)
+    out = await request.app.state.service.resolve_approval(db, p, row, AS(body.status), body.comment, body.version, edit, body.summary_hash)
     return approval_out(out, request.app.state.clock.now())

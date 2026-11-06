@@ -31,8 +31,10 @@ from sourceloop.agents.supplier.agent import SupplierProfile
 from sourceloop.api import security
 from sourceloop.api.broker import Broker
 from sourceloop.api.config import Settings
-from sourceloop.api.deps import Principal
+from sourceloop.api.deps import Principal, own_supplier_ids
 from sourceloop.api.errors import ApiError
+from sourceloop.api.negotiation_summary import ACK_KINDS
+from sourceloop.api.negotiation_summary import build as build_summary
 from sourceloop.api.studio_support import active_pin, make_ctx, pinned_config
 from sourceloop.audit.anchor_sink import FileAnchorSink
 from sourceloop.audit.canonical import dumps, sha256_hex
@@ -997,8 +999,25 @@ class ProjectService:
             return ApiError(409, "INVALID_STATE", "the project was stopped; this approval was cancelled and can no longer be resolved")
         return ApiError(409, "VERSION_CONFLICT", "approval already resolved or version mismatch")
 
+    async def _check_summary_ack(self, db: AsyncSession, p: Principal, row: Approval, status: AS, summary_hash: str | None) -> None:
+        """Where a company is committed or money moves, the person must have read the negotiation summary as it is NOW. Declining never needs it."""
+        if status is AS.REJECTED or row.kind not in ACK_KINDS:
+            return
+        proj = await db.get(Project, row.project_id)
+        if proj is None or proj.config_version_id is None:
+            return
+        if not (await pinned_config(db, self.settings, proj.config_version_id)).cfg.workflow.require_summary_ack:
+            return
+        supplier_side = p.role is RoleEnum.SUPPLIER
+        mine = await own_supplier_ids(db, p, proj.id) if supplier_side else None
+        cur = await build_summary(db, proj, "SUPPLIER" if supplier_side else "BUYER", mine)
+        if not summary_hash:
+            raise ApiError(422, "SUMMARY_NOT_CONFIRMED", "read the negotiation summary and confirm it before deciding")
+        if summary_hash != cur["hash"]:
+            raise ApiError(409, "SUMMARY_CHANGED", "the negotiation record changed since you opened the summary; read it again")
+
     async def resolve_approval(self, db: AsyncSession, p: Principal, row: Approval, status: AS, comment: str,
-                               version: int, edit: dict[str, Any]) -> Approval:
+                               version: int, edit: dict[str, Any], summary_hash: str | None = None) -> Approval:
         # the target role decides; the only exception is SBN's SUPER_ADMIN on an operational (ADMIN-targeted) item
         acting = row.target_role if (p.role is RoleEnum.SUPER_ADMIN and row.target_role is RoleEnum.ADMIN) else p.role
         if acting is not row.target_role:
@@ -1011,10 +1030,11 @@ class ProjectService:
             raise ApiError(422, "INVALID_STATUS", "status must be APPROVED, REJECTED or EDITED")
         if status is not AS.APPROVED and len(comment.strip()) < 10:
             raise ApiError(422, "COMMENT_REQUIRED", "a comment of at least 10 characters is required")
+        await self._check_summary_ack(db, p, row, status, summary_hash)
         aid, core_id, pid_, kind = row.id, row.core_id, row.project_id, row.kind
         h = self.handles.get(str(pid_))
         if h is None:
-            return await self._resolve_without_runtime(db, p, row, status, comment, version)
+            return await self._resolve_without_runtime(db, p, row, status, comment, version, summary_hash)
         async with h.resolve_lock:  # one resolution at a time per project: the memory check below cannot interleave
             # 1. fresh DB state: a stale/duplicate resolver gets 409 and the in-memory orchestrator is never touched
             cur = (await db.execute(select(Approval.status, Approval.version).where(Approval.id == aid))).first()
@@ -1024,7 +1044,7 @@ class ProjectService:
             # 2. memory resolve: writes the approval_resolved audit event BEFORE any state (memory or DB) changes (rule 10).
             #    A failure here leaves the DB row untouched (PENDING), so there is nothing to compensate.
             try:
-                await h.rt.approvals.resolve(core_id, status, str(p.id), acting, comment, version=version, edit=edit)
+                await h.rt.approvals.resolve(core_id, status, str(p.id), acting, comment, version=version, edit=edit, summary_ack=summary_hash)
             except ApprovalError as e:
                 code = {"APPROVAL_ALREADY_RESOLVED": 409, "FORBIDDEN": 403, "COMMENT_REQUIRED": 422}.get(e.code, 422)
                 raise ApiError(code, "VERSION_CONFLICT" if code == 409 else e.code) from e
@@ -1081,7 +1101,7 @@ class ProjectService:
         raise last
 
     async def _resolve_without_runtime(self, db: AsyncSession, p: Principal, row: Approval, status: AS, comment: str,
-                                       version: int) -> Approval:
+                                       version: int, summary_ack: str | None = None) -> Approval:
         """No in-memory runtime (restart / eviction). The only DB-only checkpoint is HOLD_RELEASE on a DONE project: CAS the
         approval, release the ledger hold and append the audit event in ONE transaction (audit committed with, never
         after, the change it proves). Everything else needs the lost runtime and answers 409 with an accurate reason."""
@@ -1104,7 +1124,8 @@ class ProjectService:
                         s, str(pid_), now, actor_type="human", actor_id=str(p.id), action="approval_resolved",
                         rule_id=kind.value, outcome=status.value, approver_id=str(p.id),
                         evidence=[{"approval": core_id, "decision": status.value, "edit_keys": [],
-                                   "decision_hash": sha256_hex(dumps({"edit": {}, "comment": comment}))}])
+                                   "decision_hash": sha256_hex(dumps({"edit": {}, "comment": comment})),
+                                   **({"summary_ack": summary_ack} if summary_ack else {})}])
             self._offline_locks.pop(str(pid_), None)
             self.broker.notify(str(pid_))
             await db.refresh(row)

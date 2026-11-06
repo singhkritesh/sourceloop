@@ -1,4 +1,5 @@
 import { http } from './http';
+import type { NegotiationSummary } from './summaryTypes';
 import type {
   ActivityItem, ActivitySummary, AgentPerformance, Approval, AuditEventRec, AuditVerify, Me, OrgInfo, OrgSummary, OrgUser, OverrideRate, OverridesView, OverrideSpec, Overview,
   Project, ProjectMessage, Role, Scenario, SettingsView,
@@ -45,6 +46,7 @@ export const projects = {
     http.get<{ items: AuditEventRec[] }>(`/projects/${id}/audit`, { query: { after_seq: afterSeq, limit: 500 } }),
   verify: (id: string) => http.get<AuditVerify>(`/projects/${id}/audit/verify`),
   escalations: (id: string) => http.get<{ items: Approval[] }>(`/projects/${id}/escalations`),
+  negotiationSummary: (id: string) => http.get<NegotiationSummary>(`/projects/${id}/negotiation-summary`),
   overview: (id: string) => http.get<Overview>(`/projects/${id}/overview`),
   agentPerformance: (id: string) => http.get<AgentPerformance>(`/projects/${id}/agent-performance`),
   activity: (id: string) => http.get<{ items: ActivityItem[]; summary: ActivitySummary[] }>(`/projects/${id}/activity`),
@@ -52,6 +54,7 @@ export const projects = {
 };
 
 export interface ResolveBody {
+  summary_hash?: string;
   status: 'APPROVED' | 'REJECTED' | 'EDITED';
   comment: string;
   version: number;

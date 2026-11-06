@@ -12,7 +12,7 @@ import uuid
 from collections import defaultdict
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -27,6 +27,8 @@ from sourceloop.api.deps import (
     supplier_scoped,
 )
 from sourceloop.api.errors import ApiError
+from sourceloop.api.negotiation_summary import build as build_summary
+from sourceloop.api.studio_support import pinned_config
 from sourceloop.data.db import get_session
 from sourceloop.data.enums import RoleEnum as R
 from sourceloop.data.models import (
@@ -190,6 +192,16 @@ async def overview(pid: uuid.UUID, p: Principal = Depends(require_role(*PROJECT_
     if supplier_scoped(p):
         return await _supplier_overview(db, proj, p)
     return await _buyer_overview(db, proj)
+
+
+@router.get("/{pid}/negotiation-summary")
+async def negotiation_summary(pid: uuid.UUID, request: Request, p: Principal = Depends(require_role(*PROJECT_READERS)), db: AsyncSession = Depends(get_session)) -> dict:
+    """What this side reads and confirms before an award, final terms, signature or payment release. Each side gets only its own view."""
+    proj = await get_visible_project(db, p, pid)
+    sup = supplier_scoped(p)
+    out = await build_summary(db, proj, "SUPPLIER" if sup else "BUYER", await own_supplier_ids(db, p, proj.id) if sup else None)
+    pin = await pinned_config(db, request.app.state.settings, proj.config_version_id) if proj.config_version_id else None
+    return {**out, "ack_required": bool(pin and pin.cfg.workflow.require_summary_ack)}
 
 
 @router.get("/{pid}/activity")

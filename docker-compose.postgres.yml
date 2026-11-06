@@ -1,0 +1,26 @@
+# Run the API on PostgreSQL instead of the SQLite volume:
+#   POSTGRES_PASSWORD='<choose one>' docker compose -f docker-compose.yml -f docker-compose.postgres.yml up -d --build
+# POSTGRES_PASSWORD has no default on purpose: set it yourself. No host port is published for the database.
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: sourceloop
+      POSTGRES_USER: sourceloop
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+    volumes:
+      - sl_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sourceloop -d sourceloop"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+  api:
+    environment:
+      DATABASE_URL: postgresql+asyncpg://sourceloop:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@db:5432/sourceloop
+    depends_on:
+      db:
+        condition: service_healthy
+volumes:
+  sl_pg:

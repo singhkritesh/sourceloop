@@ -13,4 +13,4 @@ USER app
 ENV DATABASE_URL=sqlite+aiosqlite:////data/sourceloop.db APP_ENV=dev
 EXPOSE 8000
 # migrate, then serve. Seed explicitly: docker compose exec api python -m sourceloop.seed
-CMD ["sh", "-c", "alembic upgrade head && exec uvicorn sourceloop.main:app --host 0.0.0.0 --port 8000"]
+CMD ["sh", "-c", "python -m sourceloop.data.migrate && exec uvicorn sourceloop.main:app --host 0.0.0.0 --port 8000"]

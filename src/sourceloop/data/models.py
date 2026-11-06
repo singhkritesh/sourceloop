@@ -575,7 +575,7 @@ for _t, _n, _stmt in sqlite_trigger_ddl_v3():
 # ---- PostgreSQL parity (R2-14). UNTESTED LIVE: only the generated DDL is compile-checked in tests (no Postgres in CI).
 PG_ABORT_FN = ("CREATE OR REPLACE FUNCTION sl_immutable_abort() RETURNS trigger LANGUAGE plpgsql AS $$ "
                "BEGIN RAISE EXCEPTION USING MESSAGE = TG_ARGV[0], ERRCODE = 'integrity_constraint_violation'; END; $$")
-_PG_FROZEN = ("(OLD.status = 'PUBLISHED' AND (NEW.body IS DISTINCT FROM OLD.body OR NEW.content_hash IS DISTINCT FROM "
+_PG_FROZEN = ("(OLD.status = 'PUBLISHED' AND (NEW.body::text IS DISTINCT FROM OLD.body::text OR NEW.content_hash IS DISTINCT FROM "
               "OLD.content_hash OR NEW.version IS DISTINCT FROM OLD.version))")
 _PG_TRIGGERS = [  # (table, name, event, WHEN condition or "", message)
     ("audit_event", "audit_event_no_update", "UPDATE", "", "audit_event is INSERT only"),

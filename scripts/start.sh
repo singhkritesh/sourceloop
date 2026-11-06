@@ -4,5 +4,5 @@ set -e
 cd "$(dirname "$0")/.."
 PORT="${PORT:-8005}"
 pkill -f "uvicorn sourceloop.main:app.*--port $PORT" 2>/dev/null || true
-.venv/bin/alembic upgrade head
+.venv/bin/python -m sourceloop.data.migrate
 exec .venv/bin/uvicorn sourceloop.main:app --host 127.0.0.1 --port "$PORT"

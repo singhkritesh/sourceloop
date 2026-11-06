@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { approvals, projects } from '../api/endpoints';
 import { SUMMARY_KINDS } from '../api/summaryTypes';
 import { NegotiationSummaryView } from '../components/NegotiationSummary';
+import { BankCheckView, type BankCheckData } from '../components/BankCheck';
 import { ApiError, errorMessage } from '../api/http';
 import { awardTerms, buildEdit, editOptions, isEditable } from '../lib/approvalEdit';
 import { fieldErrors, isLostOnRestart, isRuntimeUnavailable, LOST_ON_RESTART_TEXT } from '../lib/errors';
@@ -91,6 +92,8 @@ function ApprovalDrawer({ a, onClose, canResolve }: { a: Approval; onClose: () =
   const editable = isEditable(a.kind);
   const options = useMemo(() => editOptions(a.kind, a.evidence), [a.kind, a.evidence]);
   const pending = a.status === 'PENDING';
+  const bank = a.kind === 'HOLD_RELEASE' ? ((a.evidence as { bank_check?: BankCheckData } | null)?.bank_check ?? null) : null;
+  const bankBlocked = a.kind === 'HOLD_RELEASE' && !(bank && bank.ok);
   const ackNeeded = needsSummary && pending && !!sum.data?.ack_required;
   const cachedProject = qc.getQueryData<Project>(['project', a.project_id]);
   const lost = lostRuntime || (cachedProject ? isLostOnRestart(cachedProject) : false);
@@ -132,6 +135,7 @@ function ApprovalDrawer({ a, onClose, canResolve }: { a: Approval; onClose: () =
     if (!pending || m.isPending || lost) return;
     if (s !== 'APPROVED' && !commentOk) { toast.warn('A comment of at least 10 characters is required.'); return; }
     if (s === 'EDITED' && (!editable || !editObj)) return;
+    if (s !== 'REJECTED' && bankBlocked) { toast.warn('The bank details did not pass the checks. Decline and ask the supplier to correct them.'); return; }
     if (s !== 'REJECTED' && ackNeeded && !read) { toast.warn('Read the negotiation summary and tick the box first.'); return; }
     setConflict(false);
     setFieldErr({});
@@ -170,8 +174,8 @@ function ApprovalDrawer({ a, onClose, canResolve }: { a: Approval; onClose: () =
             <label className="row"><input type="checkbox" checked={read} onChange={(e) => setRead(e.target.checked)} /> I have read the negotiation summary above and it is what I am deciding on.</label>
           )}
           <div className="row wrap">
-            <button className="btn primary" disabled={m.isPending || lost || (ackNeeded && !read)} onClick={() => go('APPROVED')}><Icon name="check" />Approve <span className="kbd">a</span></button>
-            {!editable || lost ? null : mode === 'edit' ? <button className="btn" disabled={m.isPending || !commentOk || !editObj || (ackNeeded && !read)} onClick={() => go('EDITED')}>Submit edit</button> : <button className="btn" onClick={() => setMode('edit')}>Edit <span className="kbd">e</span></button>}
+            <button className="btn primary" disabled={m.isPending || lost || bankBlocked || (ackNeeded && !read)} onClick={() => go('APPROVED')}><Icon name="check" />Approve <span className="kbd">a</span></button>
+            {!editable || lost ? null : mode === 'edit' ? <button className="btn" disabled={m.isPending || !commentOk || !editObj || bankBlocked || (ackNeeded && !read)} onClick={() => go('EDITED')}>Submit edit</button> : <button className="btn" onClick={() => setMode('edit')}>Edit <span className="kbd">e</span></button>}
             {mode === 'reject' ? <button className="btn danger" disabled={m.isPending || !commentOk} onClick={() => go('REJECTED')}>Confirm reject</button> : <button className="btn danger" disabled={lost} onClick={() => setMode('reject')}>Reject <span className="kbd">r</span></button>}
             {mode !== 'view' && <button className="btn ghost" onClick={() => setMode('view')}>Cancel</button>}
           </div>
@@ -182,6 +186,7 @@ function ApprovalDrawer({ a, onClose, canResolve }: { a: Approval; onClose: () =
         {conflict && <div className="callout warn" role="alert"><Icon name="alert" /><div><b>Version conflict.</b> Someone else resolved or changed this item; the latest version has been reloaded.</div></div>}
         {!!a.recommendation && <div className="callout info" role="note"><Icon name="info" /><div>{AI_RECOMMENDATION_NOTICE}</div></div>}
         <ApprovalExplainer kind={a.kind} editable={editable} />
+        {bank && !sum.data?.payment && <BankCheckView data={bank} />}
         {needsSummary && (sum.isLoading ? <span className="muted">Loading the negotiation summary…</span> : sum.data ? <NegotiationSummaryView s={sum.data} /> : null)}
         <section><h4>Recommendation</h4><div style={{ marginTop: 6 }}>{a.recommendation ? <Tree value={a.recommendation} /> : <span className="muted">The agent made no recommendation.</span>}</div></section>
         <section><h4>Why a person is needed</h4><div className="row wrap" style={{ marginTop: 6 }}>{a.reasons.length ? a.reasons.map((r) => <span key={r} title={r}><Badge tone="warn">{reasonText(r)}</Badge></span>) : <span className="muted">none recorded</span>}</div></section>

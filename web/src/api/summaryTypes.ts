@@ -7,6 +7,7 @@ export interface NegotiationSummary {
   side: 'BUYER' | 'SUPPLIER'; hash: string; ack_required: boolean; how_to_read: string; assumptions: string[];
   threads: SummaryThread[];
   deal: { supplier: string | null; name: string | null; unit_price?: string; payment_days: number | null; clauses: string[]; deviations: string[]; signed: boolean } | null;
+  payment?: { account_ending: string | null; checks: { check: string; passed: boolean }[]; passed: boolean; external_verification: string | null } | null;
   your_limits: { target_unit_price?: string; highest_unit_price?: string } | null;
   record: { events: number; head_seq: number | null; head_hash: string | null };
 }

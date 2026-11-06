@@ -1073,6 +1073,8 @@ class ProjectService:
         if status is not AS.APPROVED and len(comment.strip()) < 10:
             raise ApiError(422, "COMMENT_REQUIRED", "a comment of at least 10 characters is required")
         await self._check_summary_ack(db, p, row, status, summary_hash)
+        if row.kind.value == "HOLD_RELEASE" and status is not AS.REJECTED and not ((row.evidence or {}).get("bank_check") or {}).get("ok", False):
+            raise ApiError(422, "BANK_CHECK_FAILED", "the bank details did not pass the checks; payment cannot be released (decline, and ask the supplier to correct them)")
         aid, core_id, pid_, kind = row.id, row.core_id, row.project_id, row.kind
         h = self.handles.get(str(pid_))
         if h is None:

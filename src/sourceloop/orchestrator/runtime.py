@@ -33,6 +33,8 @@ from sourceloop.llm.prompt_builder import build_choice
 from sourceloop.llm.prompts_default import JUDGE_OPTIONS, JUDGE_RUBRIC, JUDGE_STATE, JUDGE_VARS
 from sourceloop.orchestrator.approvals import Approval, ApprovalService
 from sourceloop.orchestrator.transitions import check_status, enabled_stages, next_stage
+from sourceloop.policy.bank import BankCheck
+from sourceloop.policy.bank import check as bank_check
 from sourceloop.policy.engine import Action
 from sourceloop.policy.judge import Level, Turn, Verdict, combine, judge, turn_lines
 from sourceloop.policy.leverage import Quote, Statement, verify
@@ -119,6 +121,7 @@ class ProjectState:
     awarded: str | None = None
     contract: dict[str, Any] | None = None
     hold: str | None = None
+    bank: BankCheck | None = None   # the bank details check shown with the payment release
     ranking: list[dict[str, Any]] = field(default_factory=list)
     award_advice: dict[str, Any] | None = None   # who the buyer agent recommended for the award, and whether a model or the rule chose
 
@@ -732,10 +735,17 @@ class RunExecutor:
         rt, st = self.rt, self.st
         sid = st.awarded
         assert sid is not None
-        await self._once("onboard", lambda: rt.suppliers[sid].agent.send_onboarding())
-        self._buyer_inbox({T.ONBOARD_DATA})
+        await self._once("onboard", lambda: rt.suppliers[sid].agent.send_onboarding(rt.suppliers[sid].name))
+        onboard = [e for e in rt.bus.log if e.type is T.ONBOARD_DATA and e.from_agent == f"supplier:{sid}"]   # addressed to the orchestrator, not the buyer
+        if onboard:
+            st.bank = bank_check(dict(onboard[-1].payload.get("fields", {})), rt.suppliers[sid].name)
+        if st.bank is None:
+            st.bank = bank_check({}, rt.suppliers[sid].name)   # nothing received: the check fails closed
         # bank details and payment release are ONE buyer decision at the end: the supplier's details are shown with the release
+        await self._audit("bank_checked", outcome="PASS" if st.bank.ok else "FAIL",   # audited BEFORE the person is asked
+                          evidence=[{"supplier": sid, "checks": [{"check": c, "passed": p} for c, p in st.bank.checks], "external_verification": st.bank.external}])
         st.hold = "HELD"  # agents can never release this
         await rt.approvals.ensure(rt.project_id, AK.HOLD_RELEASE, "hold", ("CONFIRM_BANK_DETAILS", "RELEASE_PAYMENT_HOLD"),
-                                  {"supplier": sid, "bank_details": "supplier-submitted onboarding details, confirmed with the release"}, {}, S.ONBOARDING.value)
+                                  {"supplier": sid, "bank_details": "supplier-submitted onboarding details, confirmed with the release",
+                                   "bank_check": st.bank.as_evidence()}, {}, S.ONBOARDING.value)
         await self._audit("ledger_hold_created", outcome="HELD", evidence=[{"supplier": sid}])

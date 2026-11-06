@@ -15,7 +15,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from sourceloop.audit.canonical import dumps, sha256_hex
 from sourceloop.data.enums import ApprovalKindEnum as K
-from sourceloop.data.models import AuditEvent, Contract, Mandate, Offer, Project, ProjectSupplier, Supplier
+from sourceloop.data.models import (
+    Approval,
+    AuditEvent,
+    Contract,
+    Mandate,
+    Offer,
+    Project,
+    ProjectSupplier,
+    Supplier,
+)
 from sourceloop.policy.judge import CODES
 from sourceloop.policy.leverage import describe
 
@@ -115,9 +124,16 @@ async def build(db: AsyncSession, proj: Project, side: str, mine: set[str] | Non
         m = await db.get(Mandate, proj.buyer_mandate_id)
         pl = m.payload if m else {}
         limits = {"target_unit_price": pl.get("target_unit_price"), "highest_unit_price": pl.get("max_unit_price")} if pl else None
+    payment = None
+    if not you:  # the bank details check belongs to the buyer's payment release; the confirmation binds to it
+        hold = (await db.execute(select(Approval).where(Approval.project_id == pid, Approval.kind == K.HOLD_RELEASE).order_by(Approval.created_at.desc()))).scalars().first()
+        bc = ((hold.evidence or {}).get("bank_check")) if hold else None
+        if bc:
+            payment = {"account_ending": bc.get("account_ending"), "checks": bc.get("checks", []), "passed": bool(bc.get("ok")),
+                       "external_verification": bc.get("external_verification")}
     head = (await db.execute(select(AuditEvent.seq, AuditEvent.hash).where(AuditEvent.project_id == str(pid)).order_by(AuditEvent.seq.desc()).limit(1))).first()
     count = (await db.execute(select(func.count()).select_from(AuditEvent).where(AuditEvent.project_id == str(pid)))).scalar_one()
-    content = {"side": side, "threads": threads, "deal": deal, "your_limits": limits,
+    content = {"side": side, "threads": threads, "deal": deal, "payment": payment, "your_limits": limits,
                "how_to_read": ("These are the offers and your agent's reasons, taken from the project's tamper-evident record. The other company's limits are never shown."
                                if you else "Every quote and counter, who chose each move, the judge's conduct notes and your own limits. Suppliers' limits are never visible to anyone but the supplier.")}
     h = sha256_hex(dumps(content))

@@ -27,7 +27,8 @@ async function supplierWatch(until) {
     const items = ((await admin.get('/approvals?status=PENDING')).items ?? []).filter((a) => a.kind === 'SUPPLIER_ACCEPT');
     for (const a of items) {
       const sup = await asUser(`supplier-${a.evidence.supplier.toLowerCase()}@sourceloop.test`);
-      const r = await sup.post(`/approvals/${a.id}/resolve`, { status: 'APPROVED', version: a.version });
+      const sum = await sup.get(`/projects/${a.project_id}/negotiation-summary`);   // the supplier reads its own summary and confirms it
+      const r = await sup.post(`/approvals/${a.id}/resolve`, { status: 'APPROVED', version: a.version, ...(sum.ack_required ? { summary_hash: sum.hash } : {}) });
       if (r.status === 200) supplierConfirmed.push(a.evidence.supplier);
     }
   }
@@ -67,11 +68,12 @@ try {
       await click('Texts'); await sleep(800);
       await p.waitForSelector('input[aria-label="Your reply"]', { timeout: 15000 });
       await p.type('input[aria-label="Your reply"]', 'APPROVE'); await p.keyboard.press('Enter');
-      repliedByText = await p.waitForFunction(() => /Done\. You approved it/.test(document.body.innerText), { timeout: 15000 }).then(() => true, () => false);
+      repliedByText = await p.waitForFunction(() => /Done\. You approved it|read the negotiation summary first/.test(document.body.innerText), { timeout: 15000 }).then(() => true, () => false);
       await shot('texts'); await sleep(1500);
     } else {
       await p.goto(BASE + '/approvals'); await sleep(1500);
       await p.evaluate(() => document.querySelector('button.appr')?.click()); await sleep(900);
+      await p.evaluate(() => document.querySelector('aside input[type=checkbox], [role=dialog] input[type=checkbox]')?.click()); await sleep(300);   // read and confirm the negotiation summary where one is shown
       await click('Approve'); await sleep(2500);
     }
     await p.goto(projectUrl); await sleep(2000);

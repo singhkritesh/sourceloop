@@ -84,6 +84,9 @@ New port: **3010** (web dev / preview). Update the global port registry.
 
 The in-app stand-in for email and SMS, for buyer users and supplier users. Two tabs: Email and Texts, with unread counts in the nav. A decision that is waiting arrives as an email and a text; reply **APPROVE**, or **DECLINE** and a reason (10+ characters), right in the window. It does exactly what the buttons do (same checks, same audit). Agent chasing shows up here too: a supplier sees a request for information or a follow-up, the buyer sees that a supplier answered. Reminders arrive after 24 hours without an answer (three at most). If the server restarted and lost a live run, the buyer finds a notice here and a **Run again from the same need** button on the project.
 
+## Payment release
+The payment-release decision shows a **Bank details check** with the negotiation summary: account ending (last four characters only), whether the account was given, has a valid shape and is held in the registered supplier name, and a note that no bank verification service is connected, so the person confirms the account by a channel they trust. Approve stays disabled while a check fails; declining needs a reason. The summary confirmation covers the bank check as shown.
+
 ## Negotiation summary
 On the award, the supplier's acceptance, the signature and the payment release the drawer shows a **Negotiation summary** built from the record: each quote and counter, who chose each move and why, the judge's notes, the agreed price and payment term, and the record fingerprint. Approve and Edit stay disabled until the person ticks that they read it (Studio `workflow.require_summary_ack`); declining needs no tick. A supplier sees only its own thread. If the record changes while the drawer is open the tick is cleared and the summary reloads.
 

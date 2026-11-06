@@ -196,9 +196,9 @@ class SupplierAgent:
                 out.append(await self.channel.send(T.REDLINE, "buyer", {"clause_key": k, "action": "accept"}, in_reply_to=env.id))
         return out
 
-    async def send_onboarding(self) -> SendResult:
+    async def send_onboarding(self, legal_name: str | None = None) -> SendResult:
         return await self.channel.send(T.ONBOARD_DATA, "orchestrator",
-                                       {"fields": {"legal_name": self.supplier_id, "bank_account": "SYNTH-0000", "edi": "on"}})
+                                       {"fields": {"legal_name": legal_name or self.supplier_id, "bank_account": "SYNTH-0000", "edi": "on"}})
 
     async def redline(self, clause_key: str, action: str, alternative_key: str | None = None) -> SendResult:
         return await self.channel.send(T.REDLINE, "buyer", {"clause_key": clause_key, "action": action,

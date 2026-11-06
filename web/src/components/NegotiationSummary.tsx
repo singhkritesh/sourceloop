@@ -1,3 +1,4 @@
+import { BankCheckView } from './BankCheck';
 import { Badge } from './ui';
 import type { NegotiationSummary as Summary } from '../api/summaryTypes';
 
@@ -29,6 +30,7 @@ export function NegotiationSummaryView({ s }: { s: Summary }) {
           {t.conduct.length > 0 && <div className="row wrap">{t.conduct.map((c, i) => <Badge key={i} tone="warn">{c.by}: {c.text}</Badge>)}</div>}
         </details>
       ))}
+      {s.payment && <BankCheckView data={s.payment} />}
       {s.assumptions.map((a) => <p key={a} className="muted">Assumption: {a}</p>)}
       <p className="muted num" title="The summary is bound to this fingerprint of the record">Record: {s.record.events} events, latest {s.record.head_hash?.slice(0, 12)}…</p>
     </section>

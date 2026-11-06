@@ -36,6 +36,7 @@ from sourceloop.orchestrator.transitions import check_status, enabled_stages, ne
 from sourceloop.policy.engine import Action
 from sourceloop.policy.judge import Level, Turn, Verdict, combine, judge, turn_lines
 from sourceloop.policy.mandates import BuyerMandate, SupplierMandate, overlap
+from sourceloop.policy.terms import term_options
 
 CLAUSE_RULES = {"LOCKED_CLAUSE", "CLAUSE_NOT_IN_LIBRARY", "CLAUSE_NOT_NEGOTIABLE"}
 
@@ -73,6 +74,9 @@ class RunConfig:
     config_version: int = 1
     confirm_requirement: bool = False  # Studio workflow.checkpoints.requirement_confirmation (the only skippable checkpoint)
     follow_up_attempts: int = 1  # Studio workflow.follow_up_attempts: how many times a silent RFQ supplier is chased (each attempt is audited)
+    payment_term_options: bool = False  # Studio workflow.payment_term_options: the award shows each finalist's price per payment term; the buyer picks one
+    payment_base_days: int = 30
+    financing_rate_pct: Decimal = Decimal("8")
     agent_rfi: bool = False  # Studio workflow.agent_rfi: the buyer agent asks suppliers with blank registry fields for them
     supplier_acceptance: bool = False  # Studio workflow.checkpoints.supplier_acceptance: the awarded supplier's user confirms the final terms
     supplier_users: frozenset[str] | None = None  # suppliers whose organization has a user account (None = not known); only those can be asked
@@ -483,6 +487,11 @@ class RunExecutor:
         ranked = sorted(final, key=lambda x: (x.landed_total, x.supplier_id))
         st.ranking = [{"supplier": x.supplier_id, "landed": str(x.landed_total), "price": str(x.offer.payload["unit_price"]),
                        "delay_p": x.delay_probability} for x in ranked]
+        if rt.cfg.payment_term_options:  # price per payment term, built by code and kept inside both sides' own limits
+            for r in st.ranking:
+                m = rt.supplier(r["supplier"]).mandate
+                r["terms"] = term_options(Decimal(r["price"]), rt.cfg.payment_base_days, rt.cfg.financing_rate_pct,
+                                          supplier_floor=m.min_unit_price, buyer_max=rt.buyer_mandate.max_unit_price)
         rule_best = ranked[0].supplier_id
         best, adv = rule_best, None
         if len(ranked) > 1 and "award_advice" not in st.done:  # the model recommends among the finalists (the human still decides); once per run
@@ -502,6 +511,7 @@ class RunExecutor:
         if a.status is AS.EDITED and pick_s is not None and not (isinstance(pick_s, str) and pick_s in st.deals):
             await self._audit("approval_edit_malformed", rule_id=a.kind.value, outcome="IGNORED_USED_RECOMMENDATION")
         st.awarded = pick_s if isinstance(pick_s, str) and pick_s in st.deals else best
+        await self._apply_payment_term(a)
 
     async def _edit_ids(self, a: Approval, key: str, *, fail_closed: bool) -> list[str]:
         """Defensive read of a human edit list. A malformed value never crashes the run: it is audited and either
@@ -609,6 +619,28 @@ class RunExecutor:
     def _deal(msg: Envelope) -> dict[str, Any]:
         return {"msg": msg, "price": msg.payload["unit_price"], "lead": msg.payload["lead_time_weeks"], "capacity": msg.payload["capacity_units"]}
 
+    async def _apply_payment_term(self, a: Approval) -> None:
+        """The buyer's pick of a payment term at the award. Only a term the code offered for the awarded supplier is applied; anything else keeps the
+        agreed price and term. The new price is recorded as an audited event before the contract uses it."""
+        rt, st = self.rt, self.st
+        sid = st.awarded
+        deal = st.deals[sid] if sid else None
+        if deal is None or not rt.cfg.payment_term_options:
+            return
+        deal["payment_days"] = rt.cfg.payment_base_days
+        want = a.edit.get("payment_days") if a.status is AS.EDITED else None
+        if want is None:
+            return
+        offered = next((r.get("terms", []) for r in st.ranking if r["supplier"] == sid), [])
+        opt = next((o for o in offered if isinstance(want, int) and not isinstance(want, bool) and o["days"] == want), None)
+        if opt is None:
+            await self._audit("approval_edit_malformed", rule_id=a.kind.value, outcome="PAYMENT_TERM_IGNORED")
+            return
+        if opt["days"] != deal["payment_days"]:
+            await self._audit("payment_term_selected", outcome="SELECTED",
+                              evidence=[{"supplier": sid, "payment_days": opt["days"], "unit_price": opt["price"], "agreed_price": str(deal["price"])}])
+            deal["price"], deal["payment_days"] = opt["price"], opt["days"]
+
     async def _stage_contracting(self) -> None:
         rt, st = self.rt, self.st
         sid = st.awarded
@@ -640,7 +672,8 @@ class RunExecutor:
                 if isinstance(r, Delivered):
                     deviations.append(clause)
         st.contract = {"supplier": sid, "clauses": list(rt.cfg.standard_clauses), "deviations": deviations,
-                       "price": st.deals[sid]["price"], "lead": st.deals[sid]["lead"]}
+                       "price": st.deals[sid]["price"], "lead": st.deals[sid]["lead"],
+                       **({"payment_days": st.deals[sid]["payment_days"]} if "payment_days" in st.deals[sid] else {})}
         cid = sha256_hex(dumps(st.contract))[:32]
         cid = f"{cid[:8]}-{cid[8:12]}-{cid[12:16]}-{cid[16:20]}-{cid[20:32]}"
         if rt.cfg.supplier_acceptance and rt.cfg.supplier_users is not None and sid not in rt.cfg.supplier_users:
@@ -648,6 +681,7 @@ class RunExecutor:
         elif rt.cfg.supplier_acceptance:  # the supplier user's own commitment; the evidence is that supplier's own agreed terms, nothing of the buyer's
             acc = await self._gate(AK.SUPPLIER_ACCEPT, f"accept:{sid}", ("CONFIRM_FINAL_TERMS",),
                                    {"supplier": sid, "price": str(st.deals[sid]["price"]), "lead_time_weeks": st.deals[sid]["lead"],
+                                    **({"payment_days": st.deals[sid]["payment_days"]} if "payment_days" in st.deals[sid] else {}),
                                     "deviations": deviations}, {})
             if acc.status is AS.REJECTED:
                 raise Stopped(OutcomeEnum.NO_DEAL, "supplier_declined_final_terms")

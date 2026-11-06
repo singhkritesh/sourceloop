@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { approvals } from '../api/endpoints';
 import { ApiError, errorMessage } from '../api/http';
-import { buildEdit, editOptions, isEditable } from '../lib/approvalEdit';
+import { awardTerms, buildEdit, editOptions, isEditable } from '../lib/approvalEdit';
 import { fieldErrors, isLostOnRestart, isRuntimeUnavailable, LOST_ON_RESTART_TEXT } from '../lib/errors';
 import type { Approval, Project } from '../api/types';
 import { Icon } from '../components/Icon';
@@ -78,6 +78,7 @@ function ApprovalDrawer({ a, onClose, canResolve }: { a: Approval; onClose: () =
   const [comment, setComment] = useState('');
   const [selected, setSelected] = useState<string[]>([]);
   const [supplier, setSupplier] = useState<string | null>(null);
+  const [paymentDays, setPaymentDays] = useState<number | null>(null);
   const [acceptChange, setAcceptChange] = useState<boolean | null>(null);
   const [fieldErr, setFieldErr] = useState<Record<string, string>>({});
   const [lostRuntime, setLostRuntime] = useState(false);
@@ -90,7 +91,7 @@ function ApprovalDrawer({ a, onClose, canResolve }: { a: Approval; onClose: () =
   const conf = findConfidence(a.evidence) ?? findConfidence(a.recommendation);
   const sources = [...findSources(a.evidence), ...findSources(a.recommendation)];
   const commentOk = comment.trim().length >= 10;
-  const editObj = mode === 'edit' ? buildEdit(a.kind, { selected, supplier, acceptChange }, a.evidence) : null;
+  const editObj = mode === 'edit' ? buildEdit(a.kind, { selected, supplier, paymentDays, acceptChange }, a.evidence) : null;
   const toggle = (id: string) => { setFieldErr({}); setSelected((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id])); };
 
   const m = useMutation({
@@ -151,7 +152,7 @@ function ApprovalDrawer({ a, onClose, canResolve }: { a: Approval; onClose: () =
           )}
           {mode === 'edit' && editable && (
             <EditControls kind={a.kind} options={options} selected={selected} onToggle={toggle} supplier={supplier}
-              onSupplier={(v) => { setFieldErr({}); setSupplier(v); }} acceptChange={acceptChange}
+              onSupplier={(v) => { setFieldErr({}); setSupplier(v); setPaymentDays(null); }} evidence={a.evidence} paymentDays={paymentDays} onPaymentDays={setPaymentDays} acceptChange={acceptChange}
               onAccept={(v) => { setFieldErr({}); setAcceptChange(v); }} errors={fieldErr} />
           )}
           <div className="row wrap">
@@ -195,7 +196,8 @@ function ApprovalExplainer({ kind, editable }: { kind: string; editable: boolean
   );
 }
 
-function EditControls({ kind, options, selected, onToggle, supplier, onSupplier, acceptChange, onAccept, errors }: {
+function EditControls({ kind, options, selected, onToggle, supplier, onSupplier, acceptChange, onAccept, errors, evidence, paymentDays, onPaymentDays }: {
+  evidence: unknown; paymentDays: number | null; onPaymentDays: (d: number | null) => void;
   kind: string; options: string[]; selected: string[]; onToggle: (id: string) => void; supplier: string | null;
   onSupplier: (id: string) => void; acceptChange: boolean | null; onAccept: (v: boolean) => void; errors: Record<string, string>;
 }) {
@@ -214,6 +216,16 @@ function EditControls({ kind, options, selected, onToggle, supplier, onSupplier,
       {kind === 'AWARD' && options.map((o) => (
         <label key={o} className="row"><input type="radio" name="award-supplier" checked={supplier === o} onChange={() => onSupplier(o)} /> <span className="mono">{o}</span></label>
       ))}
+      {kind === 'AWARD' && awardTerms(evidence, supplier).length > 1 && (
+        <div className="stack" style={{ gap: 4 }}>
+          <b>Payment term</b>
+          {awardTerms(evidence, supplier).map((t, i) => (
+            <label key={t.days} className="row"><input type="radio" name="award-term" checked={(paymentDays ?? awardTerms(evidence, supplier)[0]?.days) === t.days} onChange={() => onPaymentDays(i === 0 ? null : t.days)} />
+              <span>Net {t.days}</span> <span className="num">{t.price} per unit</span></label>
+          ))}
+          <span className="hint">A longer term raises the price by the financing cost set in Studio (an assumed rate). Only terms inside both sides' limits are listed.</span>
+        </div>
+      )}
       {kind === 'CLAUSE' && (
         <label className="row"><input type="checkbox" role="switch" checked={acceptChange === true}
           onChange={(e) => onAccept(e.target.checked)} /> Accept the proposed change {acceptChange === null && <span className="hint">(choose to enable submit)</span>}</label>

@@ -44,6 +44,7 @@ class _FailEdit(BaseModel):
 class _AwardEdit(BaseModel):
     model_config = ConfigDict(extra="forbid")
     supplier: str = _SID
+    payment_days: int | None = Field(default=None, ge=0, le=365)  # a term the award card offered for that supplier; the run ignores any other
 
 
 class _ClauseEdit(BaseModel):

@@ -37,6 +37,7 @@ export const projects = {
   start: (id: string) => http.post<{ id: string; status: string }>(`/projects/${id}/start`),
   resume: (id: string) => http.post<{ id: string; status: string }>(`/projects/${id}/resume`),
   stop: (id: string) => http.post<{ id: string; status: string }>(`/projects/${id}/stop`),
+  reopen: (id: string, body: { target_price: string; max_price: string }) => http.post<{ id: string; status: string }>(`/projects/${id}/reopen`, body),
   rerun: (id: string) => http.post<{ id: string; status: string }>(`/projects/${id}/rerun`),
   messages: (id: string, afterSeq = 0) =>
     http.get<{ items: ProjectMessage[] }>(`/projects/${id}/messages`, { query: { after_seq: afterSeq, limit: 500 } }),

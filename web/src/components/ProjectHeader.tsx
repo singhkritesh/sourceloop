@@ -22,6 +22,9 @@ export function ProjectHeader({ project, me, decisions, supplierView, inspect }:
   const role = me.role;
   const [runtimeLost, setRuntimeLost] = useState(false);
   const [confirmStop, setConfirmStop] = useState(false);
+  const [reopening, setReopening] = useState(false);
+  const [target, setTarget] = useState('');
+  const [highest, setHighest] = useState('');
   const lost = runtimeLost || isLostOnRestart(project);
   const act = useMutation({
     mutationFn: (kind: 'start' | 'resume' | 'stop') => projects[kind](project.id),
@@ -33,6 +36,15 @@ export function ProjectHeader({ project, me, decisions, supplierView, inspect }:
     onSuccess: (r) => { toast.ok('Started again from the same need'); nav(`/projects/${r.id}`); },
     onError: (e) => toast.error(errorMessage(e)),
   });
+  const reopen = useMutation({
+    mutationFn: () => projects.reopen(project.id, { target_price: target.trim(), max_price: highest.trim() }),
+    onSuccess: (r) => { setReopening(false); toast.ok('Negotiation reopened with your new limits'); void qc.invalidateQueries({ queryKey: ['projects'] }); nav(`/projects/${r.id}`); },
+    onError: (e) => toast.error(errorMessage(e)),
+  });
+  const money = /^\d+(\.\d{1,4})?$/;
+  const limitsOk = money.test(target.trim()) && money.test(highest.trim()) && Number(target) > 0 && Number(target) <= Number(highest);
+  const canReopen = role === 'BUYER' && !supplierView && !lost && !project.reopened_to && !['DRAFT', 'RUNNING'].includes(project.status)
+    && project.outcome !== 'DEAL' && !['ONBOARDING', 'DONE'].includes(project.stage);
   // who is the run waiting on? (an overview lists every checkpoint of the project)
   const waitingOn = useMemo(() => (project.status !== 'ESCALATED' ? [] : decisions.filter((d) => d.status === 'PENDING').map((d) => ({ kind: d.kind, role: d.role }))), [project.status, decisions]);
   const canRun = !supplierView;
@@ -47,8 +59,15 @@ export function ProjectHeader({ project, me, decisions, supplierView, inspect }:
         <span className="spacer" />
         {canRun && can.controlRun(role) && project.status === 'DRAFT' && <button className="btn primary" disabled={act.isPending} onClick={() => act.mutate('start')}><Icon name="play" />Start run</button>}
         {canRun && can.resume(role) && !lost && !(project.status === 'ESCALATED' && waitingOn.length > 0) && ['ESCALATED', 'FAILED_RECOVERABLE', 'STALLED', 'BUDGET_EXCEEDED'].includes(project.status) && <button className="btn" disabled={act.isPending} onClick={() => act.mutate('resume')}><Icon name="refresh" />Resume</button>}
+        {canReopen && <button className="btn" onClick={() => setReopening(true)}><Icon name="refresh" />Reopen with new limits</button>}
         {canRun && can.stop(role) && project.status === 'RUNNING' && <button className="btn danger" onClick={() => setConfirmStop(true)}><Icon name="stop" />Stop</button>}
       </div>
+      {!supplierView && (project.reopened_from || project.reopened_to) && (
+        <div className="callout info"><Icon name="info" /><div>
+          {project.reopened_from && <>This negotiation was reopened from <a href={`/projects/${project.reopened_from}`} onClick={(e) => { e.preventDefault(); nav(`/projects/${project.reopened_from}`); }}>the earlier one</a> with new limits.</>}
+          {project.reopened_to && <>This negotiation was stopped and reopened as <a href={`/projects/${project.reopened_to}`} onClick={(e) => { e.preventDefault(); nav(`/projects/${project.reopened_to}`); }}>a new project</a>. Nothing in it was changed.</>}
+        </div></div>
+      )}
       {!supplierView && <Stepper stage={project.stage} status={project.status} />}
       {lost && (
         <div className="callout bad" role="alert"><Icon name="alert" />
@@ -60,6 +79,19 @@ export function ProjectHeader({ project, me, decisions, supplierView, inspect }:
           step={nextStep({ status: project.status, stage: project.stage, outcome: project.outcome, lost, role, reason: project.reason, pendingKinds: waitingOn })} />
       )}
       {project.reason && !lost && supplierView && <div className="callout info"><Icon name="info" /><div>{project.reason}</div></div>}
+      {reopening && (
+        <Dialog title="Reopen with new limits" onClose={() => setReopening(false)} footer={<>
+          <button className="btn" onClick={() => setReopening(false)}>Cancel</button>
+          <button className="btn primary" disabled={!limitsOk || reopen.isPending} onClick={() => reopen.mutate()}>{reopen.isPending ? 'Reopening…' : 'Reopen and start'}</button></>}>
+          <p>This stops the current negotiation and starts a new one from the same need. Nothing is signed, and the current record stays as it is. Suppliers cannot confirm terms of the old one any more.</p>
+          <div className="field"><label htmlFor="ro-target">Target price per unit</label>
+            <input id="ro-target" className="input" inputMode="decimal" value={target} onChange={(e) => setTarget(e.target.value)} autoFocus /></div>
+          <div className="field"><label htmlFor="ro-max">Highest price you will pay per unit</label>
+            <input id="ro-max" className="input" inputMode="decimal" value={highest} onChange={(e) => setHighest(e.target.value)} />
+            <span className="hint">Only the agents and the platform's rules see this limit. Suppliers never do.</span></div>
+          {!limitsOk && (target || highest) && <span className="err-text" role="alert">Enter two prices, the target not above the highest.</span>}
+        </Dialog>
+      )}
       {confirmStop && (
         <Dialog title="Stop this run?" onClose={() => setConfirmStop(false)} footer={<>
           <button className="btn" onClick={() => setConfirmStop(false)}>Keep running</button>

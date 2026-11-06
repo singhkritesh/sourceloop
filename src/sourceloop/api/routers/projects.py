@@ -120,6 +120,8 @@ def svc(request: Request) -> ProjectService:
 def project_out(proj: Project, p: Principal) -> dict[str, Any]:
     base = {"id": str(proj.id), "title": proj.title, "stage": proj.stage.value, "status": proj.status.value,
             "outcome": proj.outcome.value if proj.outcome else None, "version": proj.version,
+            **({"reopened_from": proj.brief["reopened_from"]} if isinstance(proj.brief, dict) and proj.brief.get("reopened_from") else {}),
+            **({"reopened_to": proj.brief["reopened_to"]} if isinstance(proj.brief, dict) and proj.brief.get("reopened_to") else {}),
             "created_at": proj.created_at.isoformat(), "updated_at": proj.updated_at.isoformat()}
     if supplier_scoped(p):  # the buyer's brief / need text / budget are not for the counterparty
         return {**base, "title": f"Sourcing request {str(proj.id)[:8]}"}  # neutral label: the buyer's title is theirs
@@ -205,6 +207,20 @@ async def start_project(pid: uuid.UUID, request: Request, p: Principal = Depends
 async def rerun_project(pid: uuid.UUID, request: Request, p: Principal = Depends(require_role(R.BUYER)),
                         db: AsyncSession = Depends(get_session)) -> dict:
     proj = await svc(request).rerun(db, p, pid)
+    return {"id": str(proj.id), "status": "RUNNING"}
+
+
+class ReopenBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    target_price: Decimal = Field(gt=0, max_digits=14, decimal_places=4)
+    max_price: Decimal = Field(gt=0, max_digits=14, decimal_places=4)
+
+
+@router.post("/{pid}/reopen", status_code=201)
+@limiter.shared_limit(start_limit, scope="run_start")
+async def reopen_project(pid: uuid.UUID, body: ReopenBody, request: Request, p: Principal = Depends(require_role(R.BUYER)),
+                         db: AsyncSession = Depends(get_session)) -> dict:
+    proj = await svc(request).reopen(db, p, pid, target_price=body.target_price, max_price=body.max_price)
     return {"id": str(proj.id), "status": "RUNNING"}
 
 

@@ -753,6 +753,47 @@ class ProjectService:
         await self.start(nid)
         return new
 
+    async def reopen(self, db: AsyncSession, p: Principal, pid: uuid.UUID, *, target_price: Decimal, max_price: Decimal) -> Project:
+        """Reopen a negotiation before anything is signed: the old project is stopped (its open decisions are cancelled, so a supplier can no longer
+        confirm terms of it) and a linked successor starts from the same need with the buyer's new limits (a new signed mandate version). Both
+        chains record the link; the old one is never changed."""
+        old = (await db.execute(select(Project).where(Project.id == pid, Project.buyer_org_id == p.org_id))).scalar_one_or_none()
+        if old is None:
+            raise ApiError(404, "NOT_FOUND", "project not found")
+        if old.status is PS.RUNNING or self.active(pid):
+            raise ApiError(409, "STILL_RUNNING", "wait until the run pauses for a decision or ends, then reopen it")
+        if old.status is PS.DRAFT or old.stage in (S.ONBOARDING, S.DONE) or old.outcome is OutcomeEnum.DEAL:
+            raise ApiError(409, "NOT_REOPENABLE", "only a negotiation that is not yet signed can be reopened")
+        if (old.brief or {}).get("reopened_to"):
+            raise ApiError(409, "ALREADY_REOPENED", "this negotiation was already reopened")
+        if target_price > max_price:
+            raise ApiError(422, "INVALID_NEED", "the target price cannot be above the highest price")
+        b = old.brief if isinstance(old.brief, dict) else {}
+        fields = {**dict(b.get("need_fields") or {}), "target_price": str(target_price), "max_price": str(max_price)}
+        title, text = old.title, old.need_text
+        scenario, need_index, seed = str(b.get("scenario") or "happy"), b.get("need_index"), int(b.get("seed") or 42)
+        old_id, was_open = old.id, old.status not in TERMINAL
+        await db.rollback()
+        if was_open:
+            await self.stop(old_id, p)
+        new = await self.create_project(db, p, title=f"{title} (reopened)"[:200], need_text=text, scenario=scenario, need_index=need_index,
+                                        seed=seed, need_fields=fields)
+        nid = new.id
+        async with dbm.session_scope() as s:
+            row = (await s.execute(select(Project).where(Project.id == nid))).scalar_one()
+            row.brief = {**(row.brief or {}), "reopened_from": str(old_id)}
+            o = (await s.execute(select(Project).where(Project.id == old_id))).scalar_one()
+            o.brief = {**(o.brief or {}), "reopened_to": str(nid)}
+        log = AuditLog(self.store, self.clock)
+        recs = await self.store.read(str(old_id))
+        head = recs[-1].hash if recs else None
+        await log.append(str(old_id), actor_type="human", actor_id=str(p.id), action="negotiation_reopened", rule_id="reopened_by_buyer",
+                         outcome="REOPENED", evidence=[{"successor": str(nid)}], approver_id=str(p.id))
+        await log.append(str(nid), actor_type="human", actor_id=str(p.id), action="negotiation_reopened", rule_id="reopened_by_buyer",
+                         outcome="REOPENED", evidence=[{"predecessor": str(old_id), "predecessor_head": head}], approver_id=str(p.id))
+        await self.start(nid)
+        return new
+
     async def _apply_resolution(self, s: AsyncSession, pid: uuid.UUID, ref: uuid.UUID | str, kind: Any, status: AS,
                                 resolver: str, comment: str, edit: dict[str, Any], new_version: int, now: Any, *,
                                 by_core: bool = False, expect_version: int | None = None) -> bool:

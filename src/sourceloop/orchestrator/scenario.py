@@ -39,7 +39,7 @@ class NeedOverrideError(ValueError):
 
 
 NEED_OVERRIDE_KEYS = frozenset({"category", "industry", "volume_units", "required_certs", "excluded_countries",
-                                "max_lead_time_weeks", "target_price"})
+                                "max_lead_time_weeks", "target_price", "max_price"})
 
 
 def apply_need_overrides(need: Need, overrides: dict[str, Any]) -> tuple[Need, Decimal | None]:
@@ -158,6 +158,10 @@ def build_project(spec: ScenarioSpec, vis: Registry | None = None, full: Registr
     ring = KeyRing(DerivedKeys(b"sourceloop-demo-secret"))
     extra_mandate = {} if spec.min_step_pct is None else {"min_step_pct": spec.min_step_pct}
     max_price = (idx * spec.buyer_max_factor).quantize(Decimal("0.0001"))
+    if spec.need_overrides.get("max_price") is not None:  # the buyer's own ceiling (a reopened negotiation sets new limits)
+        max_price = Decimal(str(spec.need_overrides["max_price"])).quantize(Decimal("0.0001"))
+        if max_price <= 0:
+            raise NeedOverrideError("max_price must be positive")
     target_unit = (idx * spec.buyer_target_factor).quantize(Decimal("0.0001"))
     if target_price is not None:
         target_unit = target_price.quantize(Decimal("0.0001"))

@@ -21,6 +21,8 @@ export interface Project {
   version: number;
   created_at: string;
   updated_at: string;
+  reopened_from?: string;
+  reopened_to?: string;
   // buyer-side only (absent for SUPPLIER)
   need_text?: string;
   brief?: Record<string, unknown>;

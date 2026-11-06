@@ -48,6 +48,7 @@ ROUTES = [
     ("POST", "/projects/{pid}/stop", (R.BUYER, R.ADMIN, R.SUPER_ADMIN), True, None),  # destructive: denial cases only (allowed path in flow tests)
     ("POST", "/projects/{pid}/resume", (R.BUYER, R.ADMIN, R.SUPER_ADMIN), True, None),
     ("POST", "/projects/{pid}/start", (R.BUYER,), True, None),
+    ("POST", "/projects/{pid}/reopen", (R.BUYER,), True, None),  # buyer only; the allowed path is in test_reopen.py
     ("GET", "/approvals", APPROVAL_ROLES, False, False),
     ("POST", "/approvals/{aid}/resolve", (*BUYER_SIDE, R.SUPPLIER, R.ADMIN, R.SUPER_ADMIN), True, None),
     ("GET", "/suppliers/search", (R.BUYER, R.EVALUATOR, R.ADMIN, R.SUPER_ADMIN), False, False),

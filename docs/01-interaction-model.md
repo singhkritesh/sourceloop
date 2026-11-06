@@ -90,6 +90,9 @@ The bus validates schema (`extra=forbid`), type-for-stage, signature, participan
 4a. An `Accept` is valid only for an offer authored by the Accept's recipient and addressed to its sender; anything else (own counter, another supplier's offer, unknown id) is rejected as `UNKNOWN_OFFER`. A `ContractDraft` that omits any locked clause (liability/termination/ip) escalates `LOCKED_CLAUSE`.
 5. End states: `Accept` both sides → award recommendation; round cap hit or repeated counters → escalate; non-overlapping limits → `NO_DEAL` (a valid, explained outcome that reveals no numbers).
 
+### 7a. Payment terms and reopening
+At the award the orchestrator prices each finalist's deal at Net 30/45/60/90 (`policy/terms.py`, financing rate from Studio) and lists only the terms inside both sides' own limits; the buyer may pick one (audited `payment_term_selected`). Before signing, the buyer may reopen: the project stops, a successor starts from the same need with a new signed mandate version, both chains record `negotiation_reopened` (chains are never rewound).
+
 ## 8. Escalation triggers
 
 Defaults (editable in the Studio unless marked 🔒 invariant): 🔒 watchlist/forced-labor hit; 🔒 locked clause touched; 🔒 offer outside mandate; missing or unverified data; price outside index band; max rounds reached; supplier claim not backed by registry; subagent confidence below threshold; subagent timeout; custom-subagent signals; budget exceeded.

@@ -83,3 +83,8 @@ New port: **3010** (web dev / preview). Update the global port registry.
 ## Mail and texts (`/mailbox`)
 
 The in-app stand-in for email and SMS, for buyer users and supplier users. Two tabs: Email and Texts, with unread counts in the nav. A decision that is waiting arrives as an email and a text; reply **APPROVE**, or **DECLINE** and a reason (10+ characters), right in the window. It does exactly what the buttons do (same checks, same audit). Agent chasing shows up here too: a supplier sees a request for information or a follow-up, the buyer sees that a supplier answered. Reminders arrive after 24 hours without an answer (three at most). If the server restarted and lost a live run, the buyer finds a notice here and a **Run again from the same need** button on the project.
+
+## Payment terms and reopening
+
+- **Award card, Edit:** after choosing the supplier, the buyer sees Net 30 / 45 / 60 / 90 with the price per unit for that supplier (only terms inside both sides' limits). Plain Approve keeps the agreed term. The financing rate behind the prices is an assumed figure set in Studio (`workflow.financing_rate_pct`).
+- **Project header, "Reopen with new limits":** buyer only, not while running, never after signing. The dialog asks for a target price and the highest price; reopening stops the project and opens a linked new one (a banner on each links to the other).

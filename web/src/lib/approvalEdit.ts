@@ -16,9 +16,20 @@ export function editOptions(kind: string, evidence: unknown): string[] {
   return [...new Set(ids.filter((x): x is string => typeof x === 'string' && x.length > 0))];
 }
 
+export interface PaymentTerm { days: number; price: string }
+
+/** The payment terms the server offered for one ranked supplier (empty when the feature is off). */
+export function awardTerms(evidence: unknown, supplier: string | null | undefined): PaymentTerm[] {
+  const ranking = obj(evidence).ranking;
+  const row = Array.isArray(ranking) ? ranking.map(obj).find((r) => r.supplier === supplier) : undefined;
+  const terms = row && Array.isArray(row.terms) ? row.terms.map(obj) : [];
+  return terms.filter((t): t is { days: number; price: string } => typeof t.days === 'number' && typeof t.price === 'string');
+}
+
 export interface EditInput {
   selected?: string[];
   supplier?: string | null;
+  paymentDays?: number | null;
   acceptChange?: boolean | null;
 }
 
@@ -36,7 +47,9 @@ export function buildEdit(kind: string, input: EditInput, evidence: unknown): Re
       return fail.length ? { fail } : null;
     }
     case 'AWARD':
-      return input.supplier && allowed.has(input.supplier) ? { supplier: input.supplier } : null;
+      if (!input.supplier || !allowed.has(input.supplier)) return null;
+      return input.paymentDays != null && awardTerms(evidence, input.supplier).some((t) => t.days === input.paymentDays)
+        ? { supplier: input.supplier, payment_days: input.paymentDays } : { supplier: input.supplier };
     case 'CLAUSE':
       return typeof input.acceptChange === 'boolean' ? { accept_change: input.acceptChange } : null;
   }

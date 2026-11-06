@@ -95,6 +95,7 @@ class ScenarioSpec:
     buyer_profile: BuyerProfile = field(default_factory=BuyerProfile)
     min_buyer_rating: Decimal = Decimal("0.3")
     margin_pct: Decimal = Decimal("15")
+    supplier_margin: dict[str, Decimal] = field(default_factory=dict)  # evaluation only: a supplier that reports a different margin (floor) than its true one
     run: RunConfig = field(default_factory=RunConfig)
     llm_cfg: LlmConfig | None = None
     llm_providers: dict | None = None
@@ -209,7 +210,7 @@ def build_project(spec: ScenarioSpec, vis: Registry | None = None, full: Registr
         assert rec is not None and rec.unit_cost is not None
         prof = spec.profiles.get(sid, SupplierProfile())
         mandate = SupplierMandate(
-            unit_cost=rec.unit_cost, min_margin_pct=spec.margin_pct, max_capacity_units=max(rec.capacity_units or 1, 1),
+            unit_cost=rec.unit_cost, min_margin_pct=spec.supplier_margin.get(sid, spec.margin_pct), max_capacity_units=max(rec.capacity_units or 1, 1),
             lead_time_weeks=rec.lead_time_weeks or 8, max_rounds=spec.max_rounds,
             provable_certificates=tuple(c.type for c in rec.certs if c.expires_on >= TODAY),
             min_buyer_rating=spec.min_buyer_rating)

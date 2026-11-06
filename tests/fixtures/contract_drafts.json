@@ -1,0 +1,111 @@
+[
+ {
+  "name": "clean standard",
+  "clauses": {
+   "payment_terms": "Net 30",
+   "delivery": "FCA, weekly",
+   "warranty": "24 months",
+   "liability": "Capped at order value",
+   "termination": "90 days written notice",
+   "ip": "Buyer owns tooling and designs"
+  },
+  "deviations": []
+ },
+ {
+  "name": "clean with better delivery",
+  "clauses": {
+   "payment_terms": "Net 30",
+   "delivery": "FCA, twice weekly",
+   "warranty": "24 months",
+   "liability": "Capped at order value",
+   "termination": "90 days written notice",
+   "ip": "Buyer owns tooling and designs"
+  },
+  "deviations": []
+ },
+ {
+  "name": "liability uncapped",
+  "clauses": {
+   "payment_terms": "Net 30",
+   "delivery": "FCA, weekly",
+   "warranty": "24 months",
+   "liability": "Unlimited",
+   "termination": "90 days written notice",
+   "ip": "Buyer owns tooling and designs"
+  },
+  "deviations": [
+   "liability"
+  ]
+ },
+ {
+  "name": "termination shortened",
+  "clauses": {
+   "payment_terms": "Net 30",
+   "delivery": "FCA, weekly",
+   "warranty": "24 months",
+   "liability": "Capped at order value",
+   "termination": "7 days written notice",
+   "ip": "Buyer owns tooling and designs"
+  },
+  "deviations": [
+   "termination"
+  ]
+ },
+ {
+  "name": "ip moved to supplier",
+  "clauses": {
+   "payment_terms": "Net 30",
+   "delivery": "FCA, weekly",
+   "warranty": "24 months",
+   "liability": "Capped at order value",
+   "termination": "90 days written notice",
+   "ip": "Supplier owns tooling and designs"
+  },
+  "deviations": [
+   "ip"
+  ]
+ },
+ {
+  "name": "payment term shortened",
+  "clauses": {
+   "payment_terms": "Net 7",
+   "delivery": "FCA, weekly",
+   "warranty": "24 months",
+   "liability": "Capped at order value",
+   "termination": "90 days written notice",
+   "ip": "Buyer owns tooling and designs"
+  },
+  "deviations": [
+   "payment_terms"
+  ]
+ },
+ {
+  "name": "warranty cut",
+  "clauses": {
+   "payment_terms": "Net 30",
+   "delivery": "FCA, weekly",
+   "warranty": "3 months",
+   "liability": "Capped at order value",
+   "termination": "90 days written notice",
+   "ip": "Buyer owns tooling and designs"
+  },
+  "deviations": [
+   "warranty"
+  ]
+ },
+ {
+  "name": "two locked clauses",
+  "clauses": {
+   "payment_terms": "Net 30",
+   "delivery": "FCA, weekly",
+   "warranty": "24 months",
+   "liability": "Unlimited",
+   "termination": "90 days written notice",
+   "ip": "Supplier owns tooling and designs"
+  },
+  "deviations": [
+   "ip",
+   "liability"
+  ]
+ }
+]

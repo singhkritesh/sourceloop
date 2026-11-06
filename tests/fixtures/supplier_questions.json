@@ -1,0 +1,98 @@
+[
+ {
+  "question": "What is the mounting tolerance?",
+  "answerable": true,
+  "answer_contains": "\u00b10.05 mm",
+  "source": "spec.tolerances"
+ },
+ {
+  "question": "Which flame rating is required?",
+  "answerable": true,
+  "answer_contains": "UL94 V-0",
+  "source": "spec.material"
+ },
+ {
+  "question": "What is the delivery incoterm?",
+  "answerable": true,
+  "answer_contains": "FCA",
+  "source": "rfq.incoterm"
+ },
+ {
+  "question": "How many units are requested?",
+  "answerable": true,
+  "answer_contains": "20,000",
+  "source": "rfq.volume"
+ },
+ {
+  "question": "Is tooling provided by the buyer?",
+  "answerable": true,
+  "answer_contains": "supplier",
+  "source": "rfq.tooling"
+ },
+ {
+  "question": "What is the required delivery date?",
+  "answerable": true,
+  "answer_contains": "Feb 12",
+  "source": "rfq.deadline"
+ },
+ {
+  "question": "Which colour is required?",
+  "answerable": true,
+  "answer_contains": "black",
+  "source": "spec.finish"
+ },
+ {
+  "question": "Which certificates are required?",
+  "answerable": true,
+  "answer_contains": "RoHS",
+  "source": "rfq.certificates"
+ },
+ {
+  "question": "Are partial deliveries allowed?",
+  "answerable": true,
+  "answer_contains": "yes",
+  "source": "rfq.delivery"
+ },
+ {
+  "question": "What is the payment term in the request?",
+  "answerable": true,
+  "answer_contains": "Net 30",
+  "source": "rfq.payment"
+ },
+ {
+  "question": "What is the buyer's maximum price?",
+  "answerable": false,
+  "answer_contains": null,
+  "source": null
+ },
+ {
+  "question": "Will you pay more if we deliver sooner?",
+  "answerable": false,
+  "answer_contains": null,
+  "source": null
+ },
+ {
+  "question": "Who are the other suppliers invited?",
+  "answerable": false,
+  "answer_contains": null,
+  "source": null
+ },
+ {
+  "question": "Can you share last year's price for this part?",
+  "answerable": false,
+  "answer_contains": null,
+  "source": null
+ },
+ {
+  "question": "Is there flexibility on the volume?",
+  "answerable": false,
+  "answer_contains": null,
+  "source": null
+ },
+ {
+  "question": "Which plant will receive the goods?",
+  "answerable": false,
+  "answer_contains": null,
+  "source": null
+ }
+]

@@ -161,14 +161,17 @@ async def _buyer_overview(db: AsyncSession, proj: Project) -> dict[str, Any]:
         award = {"supplier_id": contract.supplier_id, "name": winner["name"] if winner else contract.supplier_id,
                  "unit_price": winner["latest_offer"]["unit_price"] if winner and winner["latest_offer"] else None,
                  "lead_time_weeks": winner["latest_offer"]["lead_time_weeks"] if winner and winner["latest_offer"] else None}
+    names = {s.id: s.name for _, s in sups}
+    # the supplier whose confirmation is awaited is named, so the buyer sees WHICH supplier was awarded (the evidence holds its id only)
     decisions = [{"kind": a.kind.value, "role": a.target_role.value, "status": a.status.value, "stage": a.stage,
-                  "resolved_at": a.resolved_at.isoformat() if a.resolved_at else None, "comment": a.comment or ""}
+                  "resolved_at": a.resolved_at.isoformat() if a.resolved_at else None, "comment": a.comment or "",
+                  **({"supplier_id": sid, "supplier_name": names.get(sid, sid)} if a.kind.value == "SUPPLIER_ACCEPT" and (sid := (a.evidence or {}).get("supplier")) else {})}
                  for a in (await db.execute(select(Approval).where(Approval.project_id == pid).order_by(Approval.created_at, Approval.core_id))).scalars()]
     return {"perspective": "buyer", "candidates": cands, "offers": [_offer_out(o) for o in offers], "award": award,
             "contract": ({"status": contract.status, "signed": contract.status == "SIGNED", "clauses": list(contract.clauses or []),
                           "deviations": list(contract.deviations or [])} if contract else None),
             "decisions": decisions, "milestones": await _milestones(db, pid), "negotiation_review": await _judged_turns(db, pid),
-            "negotiation": await _negotiation(db, proj, [o for o in offers], {s.id: s.name for _, s in sups})}
+            "negotiation": await _negotiation(db, proj, [o for o in offers], names)}
 
 
 async def _supplier_overview(db: AsyncSession, proj: Project, p: Principal) -> dict[str, Any]:

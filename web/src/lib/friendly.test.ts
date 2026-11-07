@@ -30,6 +30,8 @@ describe('friendly text', () => {
     const base = { status: 'ESCALATED', stage: 'QUALIFICATION', outcome: null, lost: false, reason: null, pendingKinds: [{ kind: 'COMPLIANCE_FLAG', role: 'COMPLIANCE' }] };
     expect(nextStep({ ...base, role: 'COMPLIANCE' }).headline).toMatch(/Your decision is needed/);
     expect(nextStep({ ...base, role: 'BUYER' }).headline).toMatch(/Waiting for Compliance/);
+    expect(nextStep({ ...base, pendingKinds: [{ kind: 'SUPPLIER_ACCEPT', role: 'SUPPLIER', supplier: 'Acme Ltd' }], role: 'BUYER' }).detail).toMatch(/awarded to Acme Ltd/);
+    expect(nextStep({ ...base, pendingKinds: [{ kind: 'SUPPLIER_ACCEPT', role: 'SUPPLIER', supplier: 'Acme Ltd' }], role: 'BUYER' }).headline).toMatch(/Waiting for Acme Ltd/);
     expect(nextStep({ ...base, role: 'BUYER' }).action).toBeUndefined(); // not the buyer's decision: no button
     expect(nextStep({ ...base, role: 'COMPLIANCE' }).action).toBe('approvals');
     expect(nextStep({ ...base, pendingKinds: [], status: 'DRAFT', role: 'BUYER' }).action).toBe('start');

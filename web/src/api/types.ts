@@ -138,7 +138,7 @@ export interface AgentDecisionRow {
 export interface AgentPerformance { live_model_decisions: boolean; agents: AgentPerf[]; decisions: AgentDecisionRow[] }
 
 export interface TurnReview { supplier_id: string | null; round: number | null; actor: 'buyer' | 'supplier' | 'you'; action: string; level: 'APPROPRIATE' | 'CONCERN' | 'INAPPROPRIATE'; notes: string[] }
-export interface Decision { kind: string; role: string; status: ApprovalStatus; stage: string; resolved_at: string | null; comment: string }
+export interface Decision { kind: string; role: string; status: ApprovalStatus; stage: string; resolved_at: string | null; comment: string; supplier_name?: string }
 export interface Milestone { stage: string; at: string }
 export interface ContractView { status: string; signed: boolean; clauses: unknown[]; deviations?: unknown[] }
 export interface NegStep {
@@ -175,3 +175,6 @@ export interface OverridesView {
   versions: { version: number; content_hash: string; note: string; created_at: string; created_by: string }[];
   editable: { agents: Record<string, AgentEditable>; prompts: Record<string, { body: string }>; models: string[]; providers: string[] };
 }
+
+/** The audit trail in plain sentences (GET /projects/{id}/record). `chain` is null for a supplier, whose view is its own part of it. */
+export interface ProjectRecord { items: { seq: number; ts: string; who: string; what: string }[]; next_after_seq: number; chain: { valid: boolean; events: number } | null }

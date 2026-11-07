@@ -224,21 +224,28 @@ export function plainStatus(status: string, outcome: string | null | undefined, 
 }
 
 export interface NextStep { headline: string; detail: string; tone: 'ok' | 'warn' | 'bad' | 'info' | 'accent' | '' ; action?: 'approvals' | 'start' | 'resume' }
-export interface NextStepInput { status: string; stage: string; outcome: string | null | undefined; pendingKinds: { kind: string; role: string }[]; lost: boolean; role?: string; reason?: string | null }
+export interface NextStepInput { status: string; stage: string; outcome: string | null | undefined; pendingKinds: { kind: string; role: string; supplier?: string }[]; lost: boolean; role?: string; reason?: string | null }
 
 /** Demo roles offered on the login page, one per approver role, so a newcomer knows where to go next. */
 const DEMO_ACCOUNT: Record<string, string> = { BUYER: 'Buyer' };
+
+/** What is going on, for a person who is waiting on someone else's decision (the approval's own text speaks to the decider). */
+const WAITING_ON: Record<string, (who: string) => string> = {
+  SUPPLIER_ACCEPT: (who) => `The deal has been awarded to ${who}. ${who} is checking the agreed price and lead time before confirming them.`,
+};
 
 /** What a person should read first on a project: what is happening and what happens next. */
 export function nextStep(i: NextStepInput): NextStep {
   if (i.lost) return { headline: 'This run was interrupted', detail: 'The server restarted and this run could not be rebuilt (it was a live-AI run, or its inputs changed). The record is intact and nothing was sent outside. Start a new project to run it again.', tone: 'warn' };
   const mine = i.pendingKinds.filter((p) => p.role === i.role);
   if (i.pendingKinds.length) {
-    const first = i.pendingKinds[0] as { kind: string; role: string };
+    const first = i.pendingKinds[0] as { kind: string; role: string; supplier?: string };
     const info = approvalInfo(first.kind);
     if (mine.length) return { headline: `Your decision is needed: ${info.title.toLowerCase()}`, detail: `${info.ask} ${info.why}`, tone: 'warn', action: 'approvals' };
     const demo = DEMO_ACCOUNT[first.role];
-    return { headline: `Waiting for ${roleLabel(first.role)}: ${info.title.toLowerCase()}`, detail: `${info.ask} The agents are paused until ${roleLabel(first.role)} decides.${demo ? ` In the demo, sign out and pick the ${demo} role to decide.` : ''}`, tone: 'info' };
+    // the ask is written for the person who decides; someone else waiting on it gets a sentence about the wait instead
+    const who = first.supplier ?? roleLabel(first.role);
+    return { headline: `Waiting for ${who}: ${info.title.toLowerCase()}`, detail: `${(WAITING_ON[first.kind]?.(first.supplier ?? 'the supplier') ?? 'A decision is needed from someone else before the agents can continue.')} The agents are paused until ${who} decides.${demo ? ` In the demo, sign out and pick the ${demo} role to decide.` : ''}`, tone: 'info' };
   }
   switch (i.status) {
     case 'DRAFT': return { headline: 'Ready when you are', detail: 'Start the run and the buyer agent will take the need through discovery, qualification, sourcing and contracting. It pauses for a person at every important decision.', tone: 'accent', action: 'start' };

@@ -2,7 +2,7 @@ import { http } from './http';
 import type { NegotiationSummary } from './summaryTypes';
 import type {
   ActivityItem, ActivitySummary, AgentPerformance, Approval, AuditEventRec, AuditVerify, Me, OrgInfo, OrgSummary, OrgUser, OverrideRate, OverridesView, OverrideSpec, Overview,
-  Project, ProjectMessage, Role, Scenario, SettingsView,
+  Project, ProjectMessage, ProjectRecord, Role, Scenario, SettingsView,
 } from './types';
 
 export interface DemoAccount { email: string; role: string; org: string; org_kind: string }
@@ -45,6 +45,7 @@ export const projects = {
   audit: (id: string, afterSeq = 0) =>
     http.get<{ items: AuditEventRec[] }>(`/projects/${id}/audit`, { query: { after_seq: afterSeq, limit: 500 } }),
   verify: (id: string) => http.get<AuditVerify>(`/projects/${id}/audit/verify`),
+  record: (id: string) => http.get<ProjectRecord>(`/projects/${id}/record`, { query: { limit: 500 } }),
   escalations: (id: string) => http.get<{ items: Approval[] }>(`/projects/${id}/escalations`),
   negotiationSummary: (id: string) => http.get<NegotiationSummary>(`/projects/${id}/negotiation-summary`),
   overview: (id: string) => http.get<Overview>(`/projects/${id}/overview`),

@@ -124,6 +124,7 @@ class ScenarioSpec:
     supplier_allowed_tools: frozenset[str] | None = None
     # explicit structured need fields from the API (category, volume_units, required_certs, ..., target_price); {} = synthetic need
     need_overrides: dict = field(default_factory=dict)
+    supplier_pool: frozenset[str] | None = None  # demo installs: only these registry suppliers can be found (the ones with a standing login); None = the whole registry
     saved_profiles: dict = field(default_factory=dict)  # supplier id -> {field: value} from that supplier's own saved profile (fresh ones only)
 
 
@@ -151,6 +152,8 @@ def build_project(spec: ScenarioSpec, vis: Registry | None = None, full: Registr
                   project_id: str = "P1", audit: AuditLog | None = None) -> ProjectRuntime:
     if vis is None or full is None:
         vis, full, _ = generate(spec.seed)
+    if spec.supplier_pool is not None:  # an empty pool finds nobody (fail closed), it never means 'everyone'
+        vis = Registry([x for x in vis.suppliers if x.id in spec.supplier_pool], vis.watchlist, vis.index_price)
     if spec.extra_watchlist:  # DB lists (e.g. synced OFAC) join the synthetic list; screening only ever gets stricter
         vis = Registry(vis.suppliers, [*vis.watchlist, *spec.extra_watchlist], vis.index_price)
     need: Need = make_needs(spec.seed)[spec.need_index]

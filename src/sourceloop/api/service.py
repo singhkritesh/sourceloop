@@ -278,6 +278,9 @@ class ProjectService:
         if spec.run.supplier_acceptance and not self.settings.demo_role_login:  # only a supplier whose organization has a user can be asked; the others stay agent-only (audited)
             with_users = select(Supplier.id).join(User, User.org_id == Supplier.org_id).where(User.role == RoleEnum.SUPPLIER)
             spec.run = dataclasses.replace(spec.run, supplier_users=frozenset((await db.execute(with_users)).scalars()))
+        if mode == "live" and self.settings.demo_role_login:  # test bed: only suppliers someone can sign in as (the role picker's standing accounts) are found, quoted and awarded
+            standing = select(Supplier.id).join(User, User.org_id == Supplier.org_id).where(User.role == RoleEnum.SUPPLIER, ~User.email.like("supplier-s%@sourceloop.test"))
+            spec.supplier_pool = frozenset((await db.execute(standing)).scalars())
         if spec.run.use_saved_profile:
             await self._saved_profiles(db, spec, cfg.workflow.saved_profile_max_age_days)
         if spec.run.leverage:

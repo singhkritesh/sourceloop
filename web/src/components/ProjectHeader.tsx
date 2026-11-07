@@ -1,12 +1,14 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { projects } from '../api/endpoints';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { approvals, projects } from '../api/endpoints';
 import { errorMessage } from '../api/http';
 import type { Decision, Me, Project } from '../api/types';
 import { isLostOnRestart, isRuntimeUnavailable, LOST_ON_RESTART_TEXT } from '../lib/errors';
 import { nextStep } from '../lib/friendly';
 import { can } from '../state/auth';
+import { ApprovalDrawer } from './ApprovalDrawer';
+import { RecordDrawer } from './RecordDrawer';
 import { toast } from '../state/ui';
 import { NextStepCard } from './Guide';
 import { Icon } from './Icon';
@@ -46,8 +48,15 @@ export function ProjectHeader({ project, me, decisions, supplierView, inspect }:
   const canReopen = role === 'BUYER' && !supplierView && !lost && !project.reopened_to && !['DRAFT', 'RUNNING'].includes(project.status)
     && project.outcome !== 'DEAL' && !['ONBOARDING', 'DONE'].includes(project.stage);
   // who is the run waiting on? (an overview lists every checkpoint of the project)
-  const waitingOn = useMemo(() => (project.status !== 'ESCALATED' ? [] : decisions.filter((d) => d.status === 'PENDING').map((d) => ({ kind: d.kind, role: d.role }))), [project.status, decisions]);
+  const waitingOn = useMemo(() => (project.status !== 'ESCALATED' ? [] : decisions.filter((d) => d.status === 'PENDING').map((d) => ({ kind: d.kind, role: d.role, supplier: d.supplier_name }))), [project.status, decisions]);
   const canRun = !supplierView;
+  // the decision itself opens right here over the project; nothing sends the person to another page
+  const [deciding, setDeciding] = useState(false);
+  const [auditing, setAuditing] = useState(false);
+  const canDecide = can.resolveApprovals(role);
+  const pendingList = useQuery({ queryKey: ['approvals', 'list'], queryFn: () => approvals.list(), refetchInterval: 10_000, enabled: canDecide && waitingOn.length > 0 });
+  const mineHere = (pendingList.data?.items ?? []).filter((a) => a.project_id === project.id && a.status === 'PENDING');
+  const current = deciding ? mineHere[0] ?? null : null;
   return (
     <div className="ws-head">
       <div className="row wrap">
@@ -57,6 +66,7 @@ export function ProjectHeader({ project, me, decisions, supplierView, inspect }:
         {project.outcome && !['DEAL', 'NO_DEAL'].includes(project.outcome) && !supplierView && <Badge tone="warn">{project.outcome.replace(/_/g, ' ').toLowerCase()}</Badge>}
         {inspect && project.llm_mode && <span title={project.llm_mode === 'replay' ? 'Demo mode: AI steps replay recorded answers, so runs are repeatable and need no model.' : 'Live AI model'}><Badge tone="info">{project.llm_mode === 'replay' ? 'demo mode' : project.llm_mode}</Badge></span>}
         <span className="spacer" />
+        <button className="btn" onClick={() => setAuditing(true)}>Audit log</button>
         {canRun && can.controlRun(role) && project.status === 'DRAFT' && <button className="btn primary" disabled={act.isPending} onClick={() => act.mutate('start')}><Icon name="play" />Start run</button>}
         {canRun && can.resume(role) && !lost && !(project.status === 'ESCALATED' && waitingOn.length > 0) && ['ESCALATED', 'FAILED_RECOVERABLE', 'STALLED', 'BUDGET_EXCEEDED'].includes(project.status) && <button className="btn" disabled={act.isPending} onClick={() => act.mutate('resume')}><Icon name="refresh" />Resume</button>}
         {canReopen && <button className="btn" onClick={() => setReopening(true)}><Icon name="refresh" />Reopen with new limits</button>}
@@ -75,10 +85,12 @@ export function ProjectHeader({ project, me, decisions, supplierView, inspect }:
             {role === 'BUYER' && !supplierView && <> <button className="btn primary sm" disabled={again.isPending} onClick={() => again.mutate()}><Icon name="refresh" />Run again from the same need</button></>}</div></div>
       )}
       {!lost && !supplierView && (
-        <NextStepCard busy={act.isPending} onApprovals={() => nav('/approvals')} onStart={() => act.mutate('start')} onResume={() => act.mutate('resume')}
+        <NextStepCard busy={act.isPending} onApprovals={() => (mineHere.length ? setDeciding(true) : nav('/approvals'))} onStart={() => act.mutate('start')} onResume={() => act.mutate('resume')}
           step={nextStep({ status: project.status, stage: project.stage, outcome: project.outcome, lost, role, reason: project.reason, pendingKinds: waitingOn })} />
       )}
       {project.reason && !lost && supplierView && <div className="callout info"><Icon name="info" /><div>{project.reason}</div></div>}
+      {auditing && <RecordDrawer projectId={project.id} title={project.title} onClose={() => setAuditing(false)} />}
+      {current && <ApprovalDrawer key={current.id} a={current} canResolve={canDecide} onClose={() => setDeciding(false)} />}
       {reopening && (
         <Dialog title="Reopen with new limits" onClose={() => setReopening(false)} footer={<>
           <button className="btn" onClick={() => setReopening(false)}>Cancel</button>

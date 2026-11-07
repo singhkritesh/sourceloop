@@ -97,3 +97,8 @@ The supplier user's **Our figures** page (`/profile`) saves capacity, lead time,
 
 - **Award card, Edit:** after choosing the supplier, the buyer sees Net 30 / 45 / 60 / 90 with the price per unit for that supplier (only terms inside both sides' limits). Plain Approve keeps the agreed term. The financing rate behind the prices is an assumed figure set in Studio (`workflow.financing_rate_pct`).
 - **Project header, "Reopen with new limits":** buyer only, not while running, never after signing. The dialog asks for a target price and the highest price; reopening stops the project and opens a linked new one (a banner on each links to the other).
+
+## Audit log and deciding in place
+
+- **Audit log** button on every project row and in the project header opens a panel (no page change) with the project's audit trail in plain sentences, newest last, with a 'chain verified' badge for a buyer. A supplier sees only its own part of the record. Prices and limits are never in it (see the negotiation summary).
+- **Decisions in place.** A project row that waits on you shows 'your decision'; clicking it, or 'Review and decide' on the project page, opens the same approval panel as the Approvals page over the current page. If a project has several open decisions the first is shown and the badge counts the rest.

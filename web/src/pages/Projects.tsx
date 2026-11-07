@@ -1,13 +1,15 @@
-import { useState, type FormEvent } from 'react';
+import { useMemo, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { health, projects } from '../api/endpoints';
+import { approvals, health, projects } from '../api/endpoints';
 import { errorMessage } from '../api/http';
 import { SCENARIOS, type Scenario } from '../api/types';
+import { ApprovalDrawer } from '../components/ApprovalDrawer';
+import { RecordDrawer } from '../components/RecordDrawer';
 import { Icon } from '../components/Icon';
 import { Welcome } from '../components/Guide';
 import { DemoBanner } from '../components/DemoBanner';
-import { Dialog, Empty, ErrorBox, fmtTime, SkeletonList, StatusBadge } from '../components/ui';
+import { Badge, Dialog, Empty, ErrorBox, fmtTime, SkeletonList, StatusBadge } from '../components/ui';
 import { stageName } from '../lib/friendly';
 import { can, useAuth } from '../state/auth';
 import { toast } from '../state/ui';
@@ -25,7 +27,19 @@ export function Projects() {
   const role = useAuth((s) => s.me?.role);
   const q = useQuery({ queryKey: ['projects'], queryFn: projects.list, refetchInterval: 8000 });
   const [open, setOpen] = useState(false);
+  const [deciding, setDeciding] = useState<string | null>(null);
+  const [auditing, setAuditing] = useState<{ id: string; title: string } | null>(null);
   const nav = useNavigate();
+  // Pending decisions per project. A checkpoint follows the one before it, so a project normally has one; if several are open the first is shown and the rest follow.
+  const canDecide = can.resolveApprovals(role);
+  const ap = useQuery({ queryKey: ['approvals', 'list'], queryFn: () => approvals.list(), refetchInterval: 10_000, enabled: canDecide });
+  const waiting = useMemo(() => {
+    const m = new Map<string, NonNullable<typeof ap.data>['items']>();
+    for (const a of ap.data?.items ?? []) if (a.status === 'PENDING') m.set(a.project_id, [...(m.get(a.project_id) ?? []), a]);
+    return m;
+  }, [ap.data]);
+  const openRow = (id: string) => (waiting.has(id) ? setDeciding(id) : nav(`/projects/${id}`));
+  const current = deciding ? waiting.get(deciding)?.[0] ?? null : null;
   return (
     <>
       <div className="page-head">
@@ -38,14 +52,16 @@ export function Projects() {
         <div className="card">
           {q.data?.items.length ? (
             <table className="table">
-              <thead><tr><th>Project</th><th>Where it is</th><th>Status</th><th className="num">Updated</th></tr></thead>
+              <thead><tr><th>Project</th><th>Where it is</th><th>Status</th><th className="num">Updated</th><th aria-label="Audit log" /></tr></thead>
               <tbody>
                 {q.data.items.map((p) => (
-                  <tr key={p.id} className="click" tabIndex={0} onClick={() => nav(`/projects/${p.id}`)} onKeyDown={(e) => { if (e.key === 'Enter') nav(`/projects/${p.id}`); }}>
+                  <tr key={p.id} className="click" tabIndex={0} onClick={() => openRow(p.id)} onKeyDown={(e) => { if (e.key === 'Enter') openRow(p.id); }}>
                     <td><b>{p.title}</b>{p.need_text && <div className="muted trunc" style={{ maxWidth: 420 }}>{p.need_text}</div>}</td>
                     <td>{stageName(p.stage)}</td>
-                    <td><StatusBadge status={p.status} reason={p.reason} outcome={p.outcome} /></td>
+                    <td><StatusBadge status={p.status} reason={p.reason} outcome={p.outcome} />
+                      {waiting.has(p.id) && <> <Badge tone="warn">{(waiting.get(p.id)?.length ?? 0) > 1 ? `${waiting.get(p.id)?.length} decisions waiting` : 'your decision'}</Badge></>}</td>
                     <td className="num muted">{fmtTime(p.updated_at)}</td>
+                    <td><button className="btn sm" aria-label={`Audit log for ${p.title}`} onClick={(e) => { e.stopPropagation(); setAuditing({ id: p.id, title: p.title }); }} onKeyDown={(e) => e.stopPropagation()}>Audit log</button></td>
                   </tr>
                 ))}
               </tbody>
@@ -56,6 +72,8 @@ export function Projects() {
         </div>
       )}
       {open && <NewProject onClose={() => setOpen(false)} />}
+      {auditing && <RecordDrawer projectId={auditing.id} title={auditing.title} onClose={() => setAuditing(null)} />}
+      {current && <ApprovalDrawer key={current.id} a={current} canResolve={canDecide} onClose={() => setDeciding(null)} />}
     </>
   );
 }

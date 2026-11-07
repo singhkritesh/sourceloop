@@ -39,6 +39,7 @@ ROUTES = [
     ("GET", "/projects/{pid}/messages", WORKFLOW, True, False),
     ("GET", "/projects/{pid}/audit", WORKFLOW, True, False),
     ("GET", "/projects/{pid}/overview", PROJECT_READERS, True, False),  # every login, from its own perspective
+    ("GET", "/projects/{pid}/record", PROJECT_READERS, True, False),  # the audit trail in plain sentences, each side its own view
     ("GET", "/projects/{pid}/negotiation-summary", PROJECT_READERS, True, False),  # each side reads only its own view
     ("GET", "/projects/{pid}/activity", INSPECTORS, True, False),  # how the agents behaved: inspectors only
     ("GET", "/projects/{pid}/agent-performance", INSPECTORS, True, False),  # decisions, model-vs-rule, confidence, judge verdicts: inspectors only

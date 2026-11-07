@@ -26,8 +26,15 @@ async function supplierWatch(until) {
     await sleep(3000);
     const items = ((await admin.get('/approvals?status=PENDING')).items ?? []).filter((a) => a.kind === 'SUPPLIER_ACCEPT');
     for (const a of items) {
-      const sup = await asUser(`supplier-${a.evidence.supplier.toLowerCase()}@sourceloop.test`);
-      const sum = await sup.get(`/projects/${a.project_id}/negotiation-summary`);   // the supplier reads its own summary and confirms it
+      // the awarded supplier is one of the standing logins (Supplier 1 or 2); the one whose own view of this project exists is the one that confirms
+      let sup, sum;
+      for (const who of ['supplier1', 'supplier2']) {
+        sup = await asUser(`${who}@sourceloop.test`);
+        if (!((await sup.get('/approvals?status=PENDING')).items ?? []).some((x) => x.id === a.id)) continue;   // a losing finalist can read the project but is not asked
+        sum = await sup.get(`/projects/${a.project_id}/negotiation-summary`);   // the supplier reads its own summary and confirms it
+        break;
+      }
+      if (!sum?.hash) continue;
       const r = await sup.post(`/approvals/${a.id}/resolve`, { status: 'APPROVED', version: a.version, ...(sum.ack_required ? { summary_hash: sum.hash } : {}) });
       if (r.status === 200) supplierConfirmed.push(a.evidence.supplier);
     }

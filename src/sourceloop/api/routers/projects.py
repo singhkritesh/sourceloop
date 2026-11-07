@@ -31,6 +31,7 @@ from sourceloop.api.deps import (
     visible_projects,
 )
 from sourceloop.api.errors import ApiError
+from sourceloop.api.record import describe
 from sourceloop.api.routers.approvals import approval_out
 from sourceloop.api.service import ProjectService
 from sourceloop.audit.chain import AuditRecord, verify_chain
@@ -47,6 +48,8 @@ from sourceloop.data.models import (
     Message,
     Organization,
     Project,
+    ProjectSupplier,
+    Supplier,
     User,
 )
 from sourceloop.data.synthetic import CATEGORIES, CERTS, COUNTRIES, INDUSTRY
@@ -356,6 +359,28 @@ async def audit_list(pid: uuid.UUID, request: Request, p: Principal = Depends(re
     rows = (await db.execute(select(AuditEvent).where(AuditEvent.project_id == str(pid), AuditEvent.seq > after_seq)
                              .order_by(AuditEvent.seq).limit(limit))).scalars().all()
     return {"items": [_audit_out(e) for e in rows]}
+
+
+@router.get("/{pid}/record")
+async def project_record(pid: uuid.UUID, request: Request, p: Principal = Depends(require_role(*PROJECT_READERS)), db: AsyncSession = Depends(get_session),
+                         after_seq: int = Query(0, ge=0), limit: int = Query(300, ge=1, le=500)) -> dict:
+    """The audit trail as plain sentences for business users: a buyer sees its whole project, a supplier only its own view of it.
+    Only code-chosen words leave this route (no evidence, hashes, prices or limits); the inspector list at /audit is unchanged."""
+    proj = await get_visible_project(db, p, pid)
+    names = {sid: nm for sid, nm in (await db.execute(select(Supplier.id, Supplier.name).join(ProjectSupplier, ProjectSupplier.supplier_id == Supplier.id)
+                                                      .where(ProjectSupplier.project_id == pid))).all()}
+    if supplier_scoped(p):
+        mine = set(await own_supplier_ids(db, p, pid))
+        raw = (await _supplier_audit(request, db, p, proj, after_seq, limit))["items"]
+        items = [{"seq": e["seq"], "ts": e["ts"], "who": (d := describe(e, names, mine))[0], "what": d[1]} for e in raw]
+        return {"items": items, "next_after_seq": items[-1]["seq"] if items else after_seq, "chain": None}
+    rows = (await db.execute(select(AuditEvent).where(AuditEvent.project_id == str(pid), AuditEvent.seq > after_seq)
+                             .order_by(AuditEvent.seq).limit(limit))).scalars().all()
+    items = [{"seq": e.seq, "ts": e.ts.isoformat(), "who": (d := describe(_audit_out(e), names))[0], "what": d[1]} for e in rows]
+    allrows = (await db.execute(select(AuditEvent).where(AuditEvent.project_id == str(pid)).order_by(AuditEvent.seq))).scalars().all()
+    anchor = await db.get(AuditAnchor, str(pid))
+    ok, _bad = verify_chain([to_record(e) for e in allrows], anchor=(anchor.seq, anchor.hash) if anchor else None)
+    return {"items": items, "next_after_seq": items[-1]["seq"] if items else after_seq, "chain": {"valid": ok, "events": len(allrows)}}
 
 
 @router.get("/{pid}/audit/verify")
